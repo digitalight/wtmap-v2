@@ -7,6 +7,8 @@ import Map from '../../components/Map';
 import Navigation from '../../components/Navigation';
 import { useRouter, useSearchParams } from 'next/navigation';
 
+export const dynamic = 'force-dynamic';
+
 const DashboardPage = () => {
   const { user, loading: authLoading, signOut } = useAuth();
   const { towers, loading: towersLoading, error } = useTowers();
