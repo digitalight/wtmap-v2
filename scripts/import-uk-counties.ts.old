@@ -1,0 +1,179 @@
+import { createClient } from '@supabase/supabase-js';
+import * as dotenv from 'dotenv';
+import * as path from 'path';
+
+// Load environment variables
+dotenv.config({ path: path.join(__dirname, '..', '.env.local') });
+
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+const supabaseKey = process.env.SUPABASE_SERVICE_KEY!;
+
+const supabase = createClient(supabaseUrl, supabaseKey);
+
+// Sample UK counties with simplified bounding box polygons
+// In production, you'd want to use actual GeoJSON boundaries from OS Data or other sources
+const ukCounties = [
+  {
+    name: 'Cambridgeshire',
+    // Simplified polygon around Cambridgeshire
+    geometry: {
+      type: 'Polygon',
+      coordinates: [[
+        [-0.5, 52.0],
+        [0.5, 52.0],
+        [0.5, 52.7],
+        [-0.5, 52.7],
+        [-0.5, 52.0]
+      ]]
+    }
+  },
+  {
+    name: 'Northamptonshire',
+    geometry: {
+      type: 'Polygon',
+      coordinates: [[
+        [-1.2, 52.0],
+        [-0.5, 52.0],
+        [-0.5, 52.6],
+        [-1.2, 52.6],
+        [-1.2, 52.0]
+      ]]
+    }
+  },
+  {
+    name: 'Bedfordshire',
+    geometry: {
+      type: 'Polygon',
+      coordinates: [[
+        [-0.7, 51.8],
+        [-0.1, 51.8],
+        [-0.1, 52.2],
+        [-0.7, 52.2],
+        [-0.7, 51.8]
+      ]]
+    }
+  },
+  {
+    name: 'Hertfordshire',
+    geometry: {
+      type: 'Polygon',
+      coordinates: [[
+        [-0.5, 51.6],
+        [0.1, 51.6],
+        [0.1, 52.1],
+        [-0.5, 52.1],
+        [-0.5, 51.6]
+      ]]
+    }
+  }
+];
+
+async function importCounties() {
+  console.log('Starting county import...');
+
+  try {
+    // Clear existing counties
+    const { error: deleteError } = await supabase
+      .from('counties')
+      .delete()
+      .neq('id', 0);
+
+    if (deleteError) {
+      console.error('Error clearing counties:', deleteError);
+    }
+
+    // Insert counties
+    for (const county of ukCounties) {
+      const { data, error } = await supabase
+        .from('counties')
+        .insert({
+          name: county.name,
+          geometry: `SRID=4326;${JSON.stringify(county.geometry)}`
+        })
+        .select();
+
+      if (error) {
+        console.error(`Error inserting ${county.name}:`, error);
+      } else {
+        console.log(`✓ Imported ${county.name}`);
+      }
+    }
+
+    console.log('\nAssigning towers to counties...');
+    
+    // Fetch all towers
+    const { data: towers, error: towerError } = await supabase
+      .from('water_towers')
+      .select('id, latitude, longitude');
+
+    if (towerError) {
+      console.error('Error fetching towers:', towerError);
+      return;
+    }
+
+    // Fetch counties with IDs
+    const { data: counties, error: countyError } = await supabase
+      .from('counties')
+      .select('id, name');
+
+    if (countyError) {
+      console.error('Error fetching counties:', countyError);
+      return;
+    }
+
+    // Simple point-in-polygon check (very basic)
+    // For production, you'd want to use PostGIS ST_Contains
+    let assigned = 0;
+    for (const tower of towers || []) {
+      for (const county of counties || []) {
+        // For now, just assign based on rough lat/long ranges
+        // In production, use proper geospatial queries
+        if (county.name === 'Cambridgeshire' && 
+            tower.longitude >= -0.5 && tower.longitude <= 0.5 &&
+            tower.latitude >= 52.0 && tower.latitude <= 52.7) {
+          const { error } = await supabase
+            .from('water_towers')
+            .update({ county_id: county.id })
+            .eq('id', tower.id);
+          
+          if (!error) assigned++;
+        } else if (county.name === 'Northamptonshire' &&
+                   tower.longitude >= -1.2 && tower.longitude <= -0.5 &&
+                   tower.latitude >= 52.0 && tower.latitude <= 52.6) {
+          const { error } = await supabase
+            .from('water_towers')
+            .update({ county_id: county.id })
+            .eq('id', tower.id);
+          
+          if (!error) assigned++;
+        } else if (county.name === 'Bedfordshire' &&
+                   tower.longitude >= -0.7 && tower.longitude <= -0.1 &&
+                   tower.latitude >= 51.8 && tower.latitude <= 52.2) {
+          const { error } = await supabase
+            .from('water_towers')
+            .update({ county_id: county.id })
+            .eq('id', tower.id);
+          
+          if (!error) assigned++;
+        } else if (county.name === 'Hertfordshire' &&
+                   tower.longitude >= -0.5 && tower.longitude <= 0.1 &&
+                   tower.latitude >= 51.6 && tower.latitude <= 52.1) {
+          const { error } = await supabase
+            .from('water_towers')
+            .update({ county_id: county.id })
+            .eq('id', tower.id);
+          
+          if (!error) assigned++;
+        }
+      }
+    }
+
+    console.log(`✓ Assigned ${assigned} towers to counties`);
+    console.log('\nCounty import complete!');
+
+  } catch (error) {
+    console.error('Import failed:', error);
+  }
+}
+
+importCounties();

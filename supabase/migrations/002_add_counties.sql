@@ -1,0 +1,8 @@
+CREATE TABLE counties (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    geometry GEOMETRY(POLYGON, 4326) NOT NULL
+);
+
+ALTER TABLE water_towers
+ADD COLUMN county_id INTEGER REFERENCES counties(id);

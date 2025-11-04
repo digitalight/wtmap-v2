@@ -1,0 +1,144 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Reset and base styles */
+html, 
+body {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  overflow: auto;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+#root,
+#__next {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: system-ui, -apple-system, sans-serif;
+  /* Prevent pull-to-refresh on mobile */
+  overscroll-behavior-y: contain;
+}
+
+/* Improve touch targets on mobile */
+@media (max-width: 768px) {
+  button, a, input, select, textarea {
+    min-height: 44px; /* iOS recommended touch target */
+  }
+}
+
+/* Leaflet CSS imports */
+@import 'leaflet/dist/leaflet.css';
+
+/* Leaflet container fixes */
+.leaflet-container {
+  height: 100% !important;
+  width: 100% !important;
+  z-index: 1;
+  /* Enable touch interactions */
+  touch-action: pan-x pan-y;
+}
+
+/* Map wrapper for proper sizing */
+.map-wrapper {
+  height: calc(100vh - 56px); /* Full viewport height minus mobile header */
+  width: 100%;
+  position: relative;
+}
+
+@media (min-width: 768px) {
+  .map-wrapper {
+    height: calc(100vh - 64px); /* Larger header on desktop */
+  }
+}
+
+/* Prevent leaflet from creating scrollbars */
+.leaflet-control-container {
+  z-index: 1000;
+}
+
+/* Position zoom controls for mobile */
+.leaflet-top.leaflet-right {
+  top: auto;
+  bottom: 20px;
+  right: 10px;
+}
+
+@media (min-width: 768px) {
+  .leaflet-top.leaflet-right {
+    top: 10px;
+    bottom: auto;
+    right: 10px;
+  }
+}
+
+/* Larger zoom buttons on mobile */
+@media (max-width: 768px) {
+  .leaflet-control-zoom a {
+    width: 36px !important;
+    height: 36px !important;
+    line-height: 36px !important;
+    font-size: 20px !important;
+  }
+}
+
+/* Ensure map fills container properly */
+.leaflet-map-pane {
+  position: relative;
+}
+
+/* Leaflet attribution styling */
+.leaflet-control-attribution {
+  font-size: 10px;
+  background: rgba(255, 255, 255, 0.7);
+}
+
+/* Dashboard specific styles */
+.dashboard-container {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.dashboard-header {
+  height: 64px; /* Fixed header height */
+  flex-shrink: 0;
+}
+
+.dashboard-main {
+  flex: 1;
+  min-height: 0; /* Important for flexbox */
+}
+
+/* Navigation specific styles */
+nav {
+  position: relative;
+  z-index: 1000;
+}
+
+/* Ensure dropdown has proper z-index */
+.dropdown-menu {
+  z-index: 9999 !important;
+}
+
+/* Custom rabbit icon styling */
+.custom-rabbit-icon {
+  background: transparent;
+  border: none;
+  animation: pulse-subtle 2s ease-in-out infinite;
+}
+
+@keyframes pulse-subtle {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.1);
+  }
+}
