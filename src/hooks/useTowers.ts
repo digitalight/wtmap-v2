@@ -41,13 +41,29 @@ export const useTowers = () => {
 
         const { data, error } = await supabase
           .from('water_towers')
-          .select('*')
+          .select(`
+            *,
+            tower_images!tower_images_tower_id_fkey(
+              image_url,
+              is_primary
+            )
+          `)
           .order('name');
 
         if (error) throw error;
 
-        // Ensure data is an array
-        setTowers(Array.isArray(data) ? data : []);
+        // Map towers and add primary image URL
+        const towersWithImages = (Array.isArray(data) ? data : []).map(tower => {
+          const primaryImage = tower.tower_images?.find((img: any) => img.is_primary);
+          const anyImage = tower.tower_images?.[0];
+          return {
+            ...tower,
+            image_url: primaryImage?.image_url || anyImage?.image_url || tower.image_url,
+            tower_images: undefined, // Remove the joined data from the tower object
+          };
+        });
+
+        setTowers(towersWithImages);
       } catch (err) {
         console.error('Error fetching towers:', err);
         setError(err as Error);
