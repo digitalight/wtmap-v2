@@ -252,11 +252,6 @@ export default function StatisticsPage() {
                             <div className="text-sm font-medium text-gray-900 truncate max-w-xs">
                               {formatUserName(user)}
                             </div>
-                            {user.first_name && (
-                              <div className="text-xs text-gray-500 truncate max-w-xs">
-                                {user.user_email}
-                              </div>
-                            )}
                           </td>
                           <td className="px-4 py-4 whitespace-nowrap">
                             <span className="px-3 py-1 inline-flex text-sm leading-5 font-semibold rounded-full bg-green-100 text-green-800">
