@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"><title>Generate Icons</title></head>
+<body style="margin:0;padding:20px;font-family:system-ui;">
+<h2>Water Towers App Icons</h2>
+<p>Right-click each icon and "Save Image As..."</p>
+
+<h3>icon-192.png (192x192)</h3>
+<canvas id="icon192" width="192" height="192" style="border:1px solid #ccc;"></canvas>
+
+<h3>icon-512.png (512x512)</h3>
+<canvas id="icon512" width="512" height="512" style="border:1px solid #ccc;"></canvas>
+
+<h3>apple-touch-icon.png (180x180)</h3>
+<canvas id="apple" width="180" height="180" style="border:1px solid #ccc;"></canvas>
+
+<script>
+function drawIcon(canvas, size) {
+  const ctx = canvas.getContext('2d');
+  const scale = size / 192;
+  
+  // Background gradient
+  const gradient = ctx.createLinearGradient(0, 0, size, size);
+  gradient.addColorStop(0, '#2563eb');
+  gradient.addColorStop(1, '#1d4ed8');
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, size, size);
+  
+  // Draw tower emoji
+  ctx.font = `${140 * scale}px Arial`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('🗼', size/2, size/2);
+}
+
+drawIcon(document.getElementById('icon192'), 192);
+drawIcon(document.getElementById('icon512'), 512);
+drawIcon(document.getElementById('apple'), 180);
+
+// Auto-download
+setTimeout(() => {
+  ['icon192', 'icon512', 'apple'].forEach((id, i) => {
+    const canvas = document.getElementById(id);
+    const names = ['icon-192.png', 'icon-512.png', 'apple-touch-icon.png'];
+    canvas.toBlob(blob => {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = names[i];
+      a.click();
+    });
+  });
+}, 1000);
+</script>
+</body>
+</html>

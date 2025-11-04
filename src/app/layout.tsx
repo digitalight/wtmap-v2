@@ -5,7 +5,7 @@ import { Inter } from 'next/font/google';
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: 'UK Water Towers Map V2',
+  title: 'UK Water Towers Map',
   description: 'Interactive map of water towers across the United Kingdom',
   viewport: {
     width: 'device-width',
@@ -14,10 +14,14 @@ export const metadata: Metadata = {
     userScalable: true,
   },
   themeColor: '#2563eb',
+  manifest: '/manifest.json',
   appleWebApp: {
     capable: true,
-    statusBarStyle: 'default',
+    statusBarStyle: 'black-translucent',
     title: 'Water Towers',
+  },
+  icons: {
+    apple: '/apple-touch-icon.png',
   },
 };
 
@@ -28,6 +32,14 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className="h-full">
+      <head>
+        <meta name="mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+        <meta name="apple-mobile-web-app-title" content="Water Towers" />
+        <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+        <link rel="manifest" href="/manifest.json" />
+      </head>
       <body className={`${inter.className} h-full m-0 p-0`}>
         <div id="root" className="h-full">
           {children}
