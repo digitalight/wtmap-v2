@@ -4,16 +4,41 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 
 interface NavigationProps {
   towersCount?: number;
 }
 
+interface UserProfile {
+  first_name?: string | null;
+  last_name?: string | null;
+}
+
 const Navigation: React.FC<NavigationProps> = ({ towersCount = 0 }) => {
   const { user, signOut } = useAuth();
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
+  const supabase = createClientComponentClient();
+
+  // Fetch user profile for name display
+  useEffect(() => {
+    const fetchUserProfile = async () => {
+      if (user?.id) {
+        const { data } = await supabase
+          .from('user_profiles')
+          .select('first_name, last_name')
+          .eq('id', user.id)
+          .single();
+        
+        setUserProfile(data);
+      }
+    };
+
+    fetchUserProfile();
+  }, [user?.id, supabase]);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -35,6 +60,22 @@ const Navigation: React.FC<NavigationProps> = ({ towersCount = 0 }) => {
     } catch (error) {
       console.error('Error signing out:', error);
     }
+  };
+
+  // Get display name - prefer first name, fallback to email
+  const getDisplayName = () => {
+    if (userProfile?.first_name) {
+      return userProfile.first_name;
+    }
+    return user?.email || 'User';
+  };
+
+  // Get initials for avatar
+  const getInitials = () => {
+    if (userProfile?.first_name) {
+      return userProfile.first_name[0].toUpperCase();
+    }
+    return user?.email?.[0]?.toUpperCase() || 'U';
   };
 
   return (
@@ -71,12 +112,12 @@ const Navigation: React.FC<NavigationProps> = ({ towersCount = 0 }) => {
                     {/* Avatar */}
                     <div className="w-7 h-7 md:w-8 md:h-8 bg-blue-600 rounded-full flex items-center justify-center flex-shrink-0">
                       <span className="text-white text-xs md:text-sm font-medium">
-                        {user.email?.[0]?.toUpperCase() || 'U'}
+                        {getInitials()}
                       </span>
                     </div>
                     <div className="hidden sm:block text-left">
                       <div className="text-xs md:text-sm font-medium text-gray-900 truncate max-w-[120px] md:max-w-none">
-                        {user.email}
+                        {getDisplayName()}
                       </div>
                       <div className="text-xs text-gray-500">
                         Signed in
@@ -103,15 +144,15 @@ const Navigation: React.FC<NavigationProps> = ({ towersCount = 0 }) => {
                         <div className="flex items-center space-x-3">
                           <div className="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center">
                             <span className="text-white font-medium">
-                              {user.email?.[0]?.toUpperCase() || 'U'}
+                              {getInitials()}
                             </span>
                           </div>
                           <div className="flex-1 min-w-0">
                             <div className="text-sm font-medium text-gray-900 truncate">
-                              {user.email}
+                              {getDisplayName()}
                             </div>
-                            <div className="text-xs text-gray-500">
-                              User ID: {user.id?.slice(-8)}
+                            <div className="text-xs text-gray-500 truncate">
+                              {user.email}
                             </div>
                           </div>
                         </div>

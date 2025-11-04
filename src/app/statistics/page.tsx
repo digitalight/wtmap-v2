@@ -14,6 +14,8 @@ interface TowerVisit {
 interface UserVisit {
   user_id: string;
   user_email: string;
+  first_name?: string | null;
+  last_name?: string | null;
   visit_count: number;
 }
 
@@ -26,6 +28,16 @@ export default function StatisticsPage() {
   useEffect(() => {
     fetchStatistics();
   }, []);
+
+  // Format user display name as "FirstName L." or fallback to email
+  const formatUserName = (user: UserVisit): string => {
+    if (user.first_name && user.last_name) {
+      return `${user.first_name} ${user.last_name.charAt(0)}.`;
+    } else if (user.first_name) {
+      return user.first_name;
+    }
+    return user.user_email;
+  };
 
   const fetchStatistics = async () => {
     setIsLoading(true);
@@ -80,29 +92,36 @@ export default function StatisticsPage() {
           userCounts.set(userId, (userCounts.get(userId) || 0) + 1);
         });
 
-        // Get user emails
+        // Get user emails and names
         const userIds = Array.from(userCounts.keys());
-        const { data: usersData, error: usersError } = await supabase
-          .from('user_visits')
-          .select('user_id, users(email)')
-          .in('user_id', userIds);
+        const { data: profilesData, error: profilesError } = await supabase
+          .from('user_profiles')
+          .select('id, email, first_name, last_name')
+          .in('id', userIds);
 
-        const userEmailMap = new Map<string, string>();
-        if (usersData) {
-          usersData.forEach((visit: any) => {
-            if (visit.users?.email && !userEmailMap.has(visit.user_id)) {
-              userEmailMap.set(visit.user_id, visit.users.email);
-            }
+        const userProfileMap = new Map<string, { email: string; first_name?: string | null; last_name?: string | null }>();
+        if (profilesData) {
+          profilesData.forEach((profile: any) => {
+            userProfileMap.set(profile.id, {
+              email: profile.email || 'Unknown User',
+              first_name: profile.first_name,
+              last_name: profile.last_name,
+            });
           });
         }
 
         // Convert to array and sort by count
         const sortedUsers = Array.from(userCounts.entries())
-          .map(([user_id, count]) => ({
-            user_id,
-            user_email: userEmailMap.get(user_id) || 'Unknown User',
-            visit_count: count,
-          }))
+          .map(([user_id, count]) => {
+            const profile = userProfileMap.get(user_id);
+            return {
+              user_id,
+              user_email: profile?.email || 'Unknown User',
+              first_name: profile?.first_name,
+              last_name: profile?.last_name,
+              visit_count: count,
+            };
+          })
           .sort((a, b) => b.visit_count - a.visit_count)
           .slice(0, 10);
 
@@ -231,8 +250,13 @@ export default function StatisticsPage() {
                           </td>
                           <td className="px-4 py-4">
                             <div className="text-sm font-medium text-gray-900 truncate max-w-xs">
-                              {user.user_email}
+                              {formatUserName(user)}
                             </div>
+                            {user.first_name && (
+                              <div className="text-xs text-gray-500 truncate max-w-xs">
+                                {user.user_email}
+                              </div>
+                            )}
                           </td>
                           <td className="px-4 py-4 whitespace-nowrap">
                             <span className="px-3 py-1 inline-flex text-sm leading-5 font-semibold rounded-full bg-green-100 text-green-800">
