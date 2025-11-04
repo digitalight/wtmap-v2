@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect } from 'react';
+import React, { useEffect, Suspense } from 'react';
 import { useAuth } from '../../hooks/useAuth';
 import { useTowers } from '../../hooks/useTowers';
 import Map from '../../components/Map';
@@ -9,7 +9,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 
 export const dynamic = 'force-dynamic';
 
-const DashboardPage = () => {
+function DashboardContent() {
   const { user, loading: authLoading, signOut } = useAuth();
   const { towers, loading: towersLoading, error } = useTowers();
   const router = useRouter();
@@ -74,6 +74,22 @@ const DashboardPage = () => {
       </main>
     </div>
   );
-};
+}
 
-export default DashboardPage;
+export default function DashboardPage() {
+  return (
+    <Suspense fallback={
+      <div className="dashboard-container bg-gray-50">
+        <Navigation towersCount={0} />
+        <main className="dashboard-main flex items-center justify-center">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2"></div>
+            <div>Loading...</div>
+          </div>
+        </main>
+      </div>
+    }>
+      <DashboardContent />
+    </Suspense>
+  );
+}
