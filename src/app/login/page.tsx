@@ -8,6 +8,8 @@ import Link from 'next/link';
 export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isSignUp, setIsSignUp] = useState(false);
@@ -25,7 +27,12 @@ export default function LoginPage() {
           email,
           password,
           options: {
-            emailRedirectTo: `${window.location.origin}/dashboard`
+            emailRedirectTo: `${window.location.origin}/dashboard`,
+            data: {
+              given_name: firstName.trim(),
+              family_name: lastName.trim(),
+              full_name: `${firstName.trim()} ${lastName.trim()}`
+            }
           }
         });
         
@@ -130,13 +137,39 @@ export default function LoginPage() {
 
         <form className="mt-8 space-y-6" onSubmit={handleAuth}>
           <div className="rounded-md shadow-sm -space-y-px">
+            {isSignUp && (
+              <>
+                <div>
+                  <input
+                    type="text"
+                    required
+                    value={firstName}
+                    onChange={(e) => setFirstName(e.target.value)}
+                    className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-t-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                    placeholder="First name"
+                  />
+                </div>
+                <div>
+                  <input
+                    type="text"
+                    required
+                    value={lastName}
+                    onChange={(e) => setLastName(e.target.value)}
+                    className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                    placeholder="Last name"
+                  />
+                </div>
+              </>
+            )}
             <div>
               <input
                 type="email"
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-t-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                className={`appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 ${
+                  isSignUp ? '' : 'rounded-t-md'
+                } focus:outline-none focus:ring-indigo-500 focus:border-indigo-500`}
                 placeholder="Email address"
               />
             </div>
@@ -169,6 +202,8 @@ export default function LoginPage() {
               onClick={() => {
                 setIsSignUp(!isSignUp);
                 setError(null);
+                setFirstName('');
+                setLastName('');
               }}
               className="text-indigo-600 hover:text-indigo-500"
             >
