@@ -19,26 +19,15 @@ interface TowerImageGalleryProps {
   refreshKey?: number;
 }
 
-// Cache for tower images
-const imageCache = new Map<string, TowerImage[]>();
-
 export default function TowerImageGallery({ towerId, currentUserId, refreshKey }: TowerImageGalleryProps) {
-  const [images, setImages] = useState<TowerImage[]>(imageCache.get(towerId) || []);
-  const [loading, setLoading] = useState(!imageCache.has(towerId));
+  const [images, setImages] = useState<TowerImage[]>([]);
+  const [loading, setLoading] = useState(true);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [loadedImages, setLoadedImages] = useState<Set<string>>(new Set());
   const supabase = createClientComponentClient();
   const fetchedRef = useRef(false);
 
   useEffect(() => {
-    // Use cached data immediately if available
-    const cached = imageCache.get(towerId);
-    if (cached) {
-      setImages(cached);
-      setLoading(false);
-      return;
-    }
-
     // Prevent duplicate fetches
     if (fetchedRef.current) return;
     fetchedRef.current = true;
@@ -69,9 +58,6 @@ export default function TowerImageGallery({ towerId, currentUserId, refreshKey }
       
       const imageData = data || [];
       setImages(imageData);
-      
-      // Cache the results
-      imageCache.set(towerId, imageData);
       
     } catch (error) {
       console.error('Error fetching images:', error);
@@ -116,9 +102,6 @@ export default function TowerImageGallery({ towerId, currentUserId, refreshKey }
         .eq('id', image.id);
 
       if (dbError) throw dbError;
-
-      // Clear cache for this tower
-      imageCache.delete(towerId);
       
       fetchImages(); // Refresh list
     } catch (error) {
@@ -127,8 +110,7 @@ export default function TowerImageGallery({ towerId, currentUserId, refreshKey }
     }
   };
 
-  // Show cached images immediately, loading indicator only for initial load
-  if (loading && images.length === 0) {
+  if (loading) {
     return (
       <div className="flex justify-center py-8">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
