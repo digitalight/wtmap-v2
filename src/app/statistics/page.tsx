@@ -73,8 +73,17 @@ export default function StatisticsPage() {
       }
 
       // Set overall stats - RPC returns array with one row
+      // Map database lowercase field names to camelCase
       if (overallStatsResult.data && Array.isArray(overallStatsResult.data) && overallStatsResult.data.length > 0) {
-        setOverallStats(overallStatsResult.data[0] as OverallStats);
+        const dbStats = overallStatsResult.data[0];
+        setOverallStats({
+          totalVisits: dbStats.totalvisits,
+          uniqueTowersVisited: dbStats.uniquetowersvisited,
+          totalTowers: dbStats.totaltowers,
+          percentageVisited: dbStats.percentagevisited,
+          totalReviews: dbStats.totalreviews,
+          averageRating: dbStats.averagerating
+        } as OverallStats);
       }
 
       // Set top towers
