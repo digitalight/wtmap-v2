@@ -13,11 +13,6 @@ ON water_towers(county_id);
 CREATE INDEX IF NOT EXISTS idx_water_towers_name 
 ON water_towers(name);
 
--- Composite index for common queries (county + operational status)
-CREATE INDEX IF NOT EXISTS idx_water_towers_county_operational 
-ON water_towers(county_id, operational) 
-WHERE operational = true;
-
 -- ============================================
 -- INDEXES FOR user_visits TABLE
 -- ============================================
