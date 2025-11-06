@@ -247,7 +247,7 @@ export default function StatisticsPage() {
                     <div>
                       <p className="text-sm font-medium text-gray-600">Total Visits</p>
                       <p className="text-3xl font-bold text-blue-600 mt-1">
-                        {overallStats.totalVisits.toLocaleString()}
+                        {(overallStats.totalVisits ?? 0).toLocaleString()}
                       </p>
                     </div>
                     <div className="bg-blue-100 rounded-full p-3">
@@ -267,10 +267,10 @@ export default function StatisticsPage() {
                     <div>
                       <p className="text-sm font-medium text-gray-600">Towers Visited</p>
                       <p className="text-3xl font-bold text-green-600 mt-1">
-                        {overallStats.uniqueTowersVisited}
+                        {overallStats.uniqueTowersVisited ?? 0}
                       </p>
                       <p className="text-sm text-gray-500">
-                        of {overallStats.totalTowers}
+                        of {overallStats.totalTowers ?? 0}
                       </p>
                     </div>
                     <div className="bg-green-100 rounded-full p-3">
@@ -287,7 +287,7 @@ export default function StatisticsPage() {
                     <div>
                       <p className="text-sm font-medium text-gray-600">Coverage</p>
                       <p className="text-3xl font-bold text-purple-600 mt-1">
-                        {overallStats.percentageVisited.toFixed(1)}%
+                        {(overallStats.percentageVisited ?? 0).toFixed(1)}%
                       </p>
                     </div>
                     <div className="bg-purple-100 rounded-full p-3">
@@ -307,12 +307,12 @@ export default function StatisticsPage() {
                     <div>
                       <p className="text-sm font-medium text-gray-600">Reviews</p>
                       <p className="text-3xl font-bold text-orange-600 mt-1">
-                        {overallStats.totalReviews.toLocaleString()}
+                        {(overallStats.totalReviews ?? 0).toLocaleString()}
                       </p>
                       <div className="flex items-center mt-1">
                         <span className="text-sm text-yellow-500">★</span>
                         <span className="text-sm font-medium text-gray-700 ml-1">
-                          {overallStats.averageRating.toFixed(1)} avg
+                          {(overallStats.averageRating ?? 0).toFixed(1)} avg
                         </span>
                       </div>
                     </div>
