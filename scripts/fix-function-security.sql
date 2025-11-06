@@ -52,7 +52,7 @@ $$;
 CREATE OR REPLACE FUNCTION get_top_towers(limit_count integer DEFAULT 25)
 RETURNS TABLE (
     tower_id text,
-    tower_name text,
+    tower_name character varying(255),
     visit_count bigint
 )
 LANGUAGE plpgsql
