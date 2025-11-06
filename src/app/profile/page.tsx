@@ -60,6 +60,13 @@ const ProfilePage = () => {
   const [countyProgressLoaded, setCountyProgressLoaded] = useState(false);
   const supabase = createClientComponentClient();
   const dataFetchedRef = useRef(false);
+  const [showSkeleton, setShowSkeleton] = useState(true);
+
+  useEffect(() => {
+    // Show content faster - hide skeleton after short delay even if loading
+    const timer = setTimeout(() => setShowSkeleton(false), 500);
+    return () => clearTimeout(timer);
+  }, []);
 
   useEffect(() => {
     // Prevent duplicate fetches in strict mode
@@ -73,7 +80,10 @@ const ProfilePage = () => {
     if (!user) return;
 
     try {
-      setIsLoading(true);
+      // Don't show loading spinner if we already have some data (background refresh)
+      if (!stats) {
+        setIsLoading(true);
+      }
 
       // Fetch user visits (which include rating and comment data)
       const visitsResponse = await supabase
@@ -84,11 +94,27 @@ const ProfilePage = () => {
 
       if (visitsResponse.error) {
         console.error('Error fetching visits:', visitsResponse.error);
+        setIsLoading(false);
+        return;
       }
 
-      // Fetch tower details for visits
+      // Fetch tower details for visits - only if we have visits
       const towerIds = visitsResponse.data?.map(v => v.tower_id) || [];
       
+      if (towerIds.length === 0) {
+        // No visits yet, set empty data
+        setStats({
+          towersVisited: 0,
+          commentsLeft: 0,
+          averageRating: 0,
+          totalRatings: 0
+        });
+        setRecentVisits([]);
+        setRecentComments([]);
+        setIsLoading(false);
+        return;
+      }
+
       const uniqueTowerIds = Array.from(new Set(towerIds));
       const towersResponse = await supabase
         .from('water_towers')
@@ -285,14 +311,31 @@ const ProfilePage = () => {
     return '⭐'.repeat(rating) + '☆'.repeat(5 - rating);
   };
 
-  if (loading || isLoading) {
+  // Only show loading on auth, not data loading (show stale/empty data instead)
+  if (loading) {
     return (
       <div className="min-h-screen bg-gray-50">
         <Navigation />
         <div className="max-w-4xl mx-auto px-4 py-8">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2"></div>
-            <div>Loading your profile...</div>
+          {/* Skeleton loader instead of spinner */}
+          <div className="animate-pulse">
+            <div className="bg-white rounded-lg shadow p-6 mb-6">
+              <div className="flex items-center space-x-4">
+                <div className="w-16 h-16 bg-gray-300 rounded-full"></div>
+                <div className="flex-1">
+                  <div className="h-6 bg-gray-300 rounded w-1/3 mb-2"></div>
+                  <div className="h-4 bg-gray-300 rounded w-1/4"></div>
+                </div>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+              {[1, 2, 3, 4].map(i => (
+                <div key={i} className="bg-white rounded-lg shadow p-4">
+                  <div className="h-8 bg-gray-300 rounded mb-2"></div>
+                  <div className="h-4 bg-gray-300 rounded w-2/3"></div>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       </div>

@@ -28,8 +28,9 @@ function DashboardContent() {
     }
   };
 
-  // Show loading while fetching towers
-  if (towersLoading) {
+  // Show loading only if we have no towers at all (first load ever)
+  // If we have cached towers, show them immediately even while loading fresh data
+  if (towersLoading && towers.length === 0) {
     return (
       <div className="dashboard-container bg-gray-50">
         <Navigation towersCount={0} />
@@ -44,7 +45,7 @@ function DashboardContent() {
   }
 
   // Show error state
-  if (error) {
+  if (error && towers.length === 0) {
     return (
       <div className="dashboard-container bg-gray-50">
         <Navigation towersCount={0} />
