@@ -59,7 +59,7 @@ export default function StatisticsPage() {
       // Use Promise.all to run queries in parallel for better performance
       const [overallStatsResult, topTowersResult, topUsersResult] = await Promise.all([
         // Overall statistics - more efficient single query
-        supabase.rpc('get_overall_statistics').single(),
+        supabase.rpc('get_overall_statistics'),
         // Top towers by visit count - using database aggregation
         supabase.rpc('get_top_towers', { limit_count: 25 }),
         // Top users by visit count - using database aggregation  
@@ -72,9 +72,9 @@ export default function StatisticsPage() {
         return;
       }
 
-      // Set overall stats
-      if (overallStatsResult.data) {
-        setOverallStats(overallStatsResult.data as OverallStats);
+      // Set overall stats - RPC returns array with one row
+      if (overallStatsResult.data && Array.isArray(overallStatsResult.data) && overallStatsResult.data.length > 0) {
+        setOverallStats(overallStatsResult.data[0] as OverallStats);
       }
 
       // Set top towers
