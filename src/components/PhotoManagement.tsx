@@ -35,51 +35,65 @@ export default function PhotoManagement() {
   const fetchImages = async () => {
     setIsLoading(true);
     try {
-      const { data, error } = await supabase
+      // First, get all tower images
+      const { data: imagesData, error: imagesError } = await supabase
         .from('tower_images')
-        .select(`
-          id,
-          tower_id,
-          user_id,
-          image_url,
-          storage_path,
-          uploaded_at,
-          is_primary,
-          water_towers (
-            name
-          ),
-          user_profiles (
-            email,
-            first_name,
-            last_name
-          )
-        `)
+        .select('*')
         .order('uploaded_at', { ascending: false });
 
-      if (error) {
-        console.error('Error fetching images:', error);
-        throw error;
+      if (imagesError) {
+        console.error('Error fetching images:', imagesError);
+        throw imagesError;
       }
 
-      // Transform the data
-      const transformedImages = data?.map((img: any) => ({
-        id: img.id,
-        tower_id: img.tower_id,
-        user_id: img.user_id,
-        image_url: img.image_url,
-        storage_path: img.storage_path,
-        uploaded_at: img.uploaded_at,
-        is_primary: img.is_primary,
-        tower: img.water_towers ? {
-          name: img.water_towers.name,
-        } : undefined,
-        user: img.user_profiles ? {
-          email: img.user_profiles.email,
-          first_name: img.user_profiles.first_name,
-          last_name: img.user_profiles.last_name,
-        } : undefined,
-      })) || [];
+      if (!imagesData || imagesData.length === 0) {
+        setImages([]);
+        return;
+      }
 
+      // Get unique tower IDs and user IDs
+      const towerIds = Array.from(new Set(imagesData.map(img => img.tower_id)));
+      const userIds = Array.from(new Set(imagesData.map(img => img.user_id)));
+
+      // Fetch tower names
+      const { data: towersData } = await supabase
+        .from('water_towers')
+        .select('id, name')
+        .in('id', towerIds);
+
+      // Fetch user profiles
+      const { data: usersData } = await supabase
+        .from('user_profiles')
+        .select('id, email, first_name, last_name')
+        .in('id', userIds);
+
+      // Create lookup maps
+      const towersMap = new Map(towersData?.map(t => [t.id, t]) || []);
+      const usersMap = new Map(usersData?.map(u => [u.id, u]) || []);
+
+      // Transform the data
+      const transformedImages = imagesData.map((img: any) => {
+        const tower = towersMap.get(img.tower_id);
+        const user = usersMap.get(img.user_id);
+
+        return {
+          id: img.id,
+          tower_id: img.tower_id,
+          user_id: img.user_id,
+          image_url: img.image_url,
+          storage_path: img.storage_path,
+          uploaded_at: img.uploaded_at,
+          is_primary: img.is_primary,
+          tower: tower ? { name: tower.name } : undefined,
+          user: user ? {
+            email: user.email,
+            first_name: user.first_name,
+            last_name: user.last_name,
+          } : undefined,
+        };
+      });
+
+      console.log('Fetched images:', transformedImages.length);
       setImages(transformedImages);
     } catch (error) {
       console.error('Error fetching images:', error);
