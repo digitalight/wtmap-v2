@@ -24,6 +24,9 @@ export default function TowerComments({ towerId, towerName }: TowerCommentsProps
   const [newComment, setNewComment] = useState('');
   const [newRating, setNewRating] = useState(5);
   const [showCommentForm, setShowCommentForm] = useState(false);
+  const [editingCommentId, setEditingCommentId] = useState<number | null>(null);
+  const [editComment, setEditComment] = useState('');
+  const [editRating, setEditRating] = useState(5);
 
   // Load comments when component mounts
   useEffect(() => {
@@ -120,6 +123,50 @@ export default function TowerComments({ towerId, towerName }: TowerCommentsProps
       console.error('Error submitting comment (caught):', error);
       console.error('Error type:', error instanceof Error ? error.message : JSON.stringify(error));
       alert(`Failed to submit comment: ${error instanceof Error ? error.message : 'Please try again.'}`);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const startEditing = (comment: Comment) => {
+    setEditingCommentId(comment.id);
+    setEditComment(comment.comment);
+    setEditRating(comment.rating);
+    setShowCommentForm(false); // Close add form if open
+  };
+
+  const cancelEditing = () => {
+    setEditingCommentId(null);
+    setEditComment('');
+    setEditRating(5);
+  };
+
+  const updateComment = async () => {
+    if (!user || !editComment.trim() || editingCommentId === null) return;
+
+    setSubmitting(true);
+    try {
+      const { error } = await supabase
+        .from('user_visits')
+        .update({
+          comment: editComment.trim(),
+          rating: editRating
+        })
+        .eq('id', editingCommentId)
+        .eq('user_id', user.id); // Ensure user can only edit their own comments
+
+      if (error) {
+        console.error('Error updating comment:', error);
+        alert(`Failed to update comment: ${error.message || 'Please try again.'}`);
+        return;
+      }
+
+      // Reload comments to get the updated list
+      await loadComments();
+      cancelEditing();
+    } catch (error) {
+      console.error('Error updating comment:', error);
+      alert(`Failed to update comment: ${error instanceof Error ? error.message : 'Please try again.'}`);
     } finally {
       setSubmitting(false);
     }
@@ -253,15 +300,69 @@ export default function TowerComments({ towerId, towerName }: TowerCommentsProps
         ) : (
           comments.map((comment) => (
             <div key={comment.id} className="border-b border-gray-200 pb-4">
-              <div className="flex items-start justify-between mb-2">
-                <div className="flex items-center space-x-3">
-                  {renderStars(comment.rating)}
-                  <span className="text-sm text-gray-600">
-                    Visitor Review
-                  </span>
+              {editingCommentId === comment.id ? (
+                // Edit Form
+                <div className="p-4 bg-gray-50 rounded-lg">
+                  <h4 className="font-semibold mb-3">Edit Your Review</h4>
+                  
+                  <div className="mb-3">
+                    <label className="block text-sm font-medium mb-1">Rating</label>
+                    {renderStars(editRating, true, setEditRating)}
+                  </div>
+
+                  <div className="mb-3">
+                    <label className="block text-sm font-medium mb-1">Comment</label>
+                    <textarea
+                      value={editComment}
+                      onChange={(e) => setEditComment(e.target.value)}
+                      placeholder={`Share your thoughts about ${towerName}...`}
+                      className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      rows={3}
+                      maxLength={500}
+                    />
+                    <div className="text-xs text-gray-500 mt-1">
+                      {editComment.length}/500 characters
+                    </div>
+                  </div>
+
+                  <div className="flex space-x-3">
+                    <button
+                      onClick={updateComment}
+                      disabled={!editComment.trim() || submitting}
+                      className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {submitting ? 'Updating...' : 'Update Review'}
+                    </button>
+                    <button
+                      onClick={cancelEditing}
+                      className="bg-gray-300 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-400"
+                    >
+                      Cancel
+                    </button>
+                  </div>
                 </div>
-              </div>
-              <p className="text-gray-700">{comment.comment}</p>
+              ) : (
+                // Display Comment
+                <>
+                  <div className="flex items-start justify-between mb-2">
+                    <div className="flex items-center space-x-3">
+                      {renderStars(comment.rating)}
+                      <span className="text-sm text-gray-600">
+                        Visitor Review
+                      </span>
+                    </div>
+                    {user && user.id === comment.user_id && (
+                      <button
+                        onClick={() => startEditing(comment)}
+                        className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+                      >
+                        Edit
+                      </button>
+                    )}
+                  </div>
+                  <p className="text-gray-700">{comment.comment}</p>
+                </>
+              )}
             </div>
           ))
         )}
