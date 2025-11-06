@@ -16,9 +16,10 @@ interface TowerImage {
 interface TowerImageGalleryProps {
   towerId: string;
   currentUserId?: string;
+  refreshKey?: number;
 }
 
-export default function TowerImageGallery({ towerId, currentUserId }: TowerImageGalleryProps) {
+export default function TowerImageGallery({ towerId, currentUserId, refreshKey }: TowerImageGalleryProps) {
   const [images, setImages] = useState<TowerImage[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
@@ -26,7 +27,7 @@ export default function TowerImageGallery({ towerId, currentUserId }: TowerImage
 
   useEffect(() => {
     fetchImages();
-  }, [towerId]);
+  }, [towerId, refreshKey]);
 
   const fetchImages = async () => {
     try {

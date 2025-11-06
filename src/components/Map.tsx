@@ -66,6 +66,7 @@ const Map: React.FC<MapProps> = ({ towers = [], user = null, selectedTowerId = n
   const [isStreetViewOpen, setIsStreetViewOpen] = useState(false);
   const [streetViewTower, setStreetViewTower] = useState<Tower | null>(null);
   const [showFilters, setShowFilters] = useState(false);
+  const [galleryRefreshKey, setGalleryRefreshKey] = useState(0);
   const supabase = createClientComponentClient();
 
   useEffect(() => {
@@ -832,7 +833,11 @@ function TowerDetailsModal({
                   {/* Tower Photos Section */}
                   <div className="border-t pt-4">
                     <h4 className="text-sm font-medium text-gray-900 mb-3">Photos</h4>
-                    <TowerImageGallery towerId={tower.id} currentUserId={user?.id} />
+                    <TowerImageGallery 
+                      towerId={tower.id} 
+                      currentUserId={user?.id}
+                      refreshKey={galleryRefreshKey}
+                    />
                     
                     {user && (
                       <div className="mt-4">
@@ -840,8 +845,8 @@ function TowerDetailsModal({
                           towerId={tower.id}
                           userId={user.id}
                           onImageUploaded={() => {
-                            // Refresh the gallery by forcing a re-render
-                            // The gallery component will handle its own refresh
+                            // Trigger gallery refresh by incrementing the key
+                            setGalleryRefreshKey(prev => prev + 1);
                           }}
                         />
                       </div>
