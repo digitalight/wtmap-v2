@@ -66,7 +66,6 @@ const Map: React.FC<MapProps> = ({ towers = [], user = null, selectedTowerId = n
   const [isStreetViewOpen, setIsStreetViewOpen] = useState(false);
   const [streetViewTower, setStreetViewTower] = useState<Tower | null>(null);
   const [showFilters, setShowFilters] = useState(false);
-  const [galleryRefreshKey, setGalleryRefreshKey] = useState(0);
   const supabase = createClientComponentClient();
 
   useEffect(() => {
@@ -670,6 +669,7 @@ function TowerDetailsModal({
   onOpenStreetView: (tower: Tower) => void;
 }) {
   const [isLoading, setIsLoading] = useState(false);
+  const [galleryRefreshKey, setGalleryRefreshKey] = useState(0);
   const supabase = createClientComponentClient();
 
   const hasVisited = tower ? visitedTowers.has(tower.id) : false;
