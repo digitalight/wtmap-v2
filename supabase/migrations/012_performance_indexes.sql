@@ -56,6 +56,10 @@ WHERE rating IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_tower_images_tower_id 
 ON tower_images(tower_id);
 
+-- Composite index for fast primary image lookup (most common query)
+CREATE INDEX IF NOT EXISTS idx_tower_images_tower_primary 
+ON tower_images(tower_id, is_primary DESC, uploaded_at DESC);
+
 -- Index for user's uploaded images
 CREATE INDEX IF NOT EXISTS idx_tower_images_user_id 
 ON tower_images(user_id);

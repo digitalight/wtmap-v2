@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 
 interface TowerImage {
@@ -19,32 +19,69 @@ interface TowerImageGalleryProps {
   refreshKey?: number;
 }
 
+// Cache for tower images
+const imageCache = new Map<string, TowerImage[]>();
+
 export default function TowerImageGallery({ towerId, currentUserId, refreshKey }: TowerImageGalleryProps) {
-  const [images, setImages] = useState<TowerImage[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [images, setImages] = useState<TowerImage[]>(imageCache.get(towerId) || []);
+  const [loading, setLoading] = useState(!imageCache.has(towerId));
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [loadedImages, setLoadedImages] = useState<Set<string>>(new Set());
   const supabase = createClientComponentClient();
+  const fetchedRef = useRef(false);
 
   useEffect(() => {
+    // Use cached data immediately if available
+    const cached = imageCache.get(towerId);
+    if (cached) {
+      setImages(cached);
+      setLoading(false);
+      return;
+    }
+
+    // Prevent duplicate fetches
+    if (fetchedRef.current) return;
+    fetchedRef.current = true;
+
     fetchImages();
-  }, [towerId, refreshKey]);
+  }, [towerId]);
+
+  // Refetch when refreshKey changes (after upload)
+  useEffect(() => {
+    if (refreshKey && refreshKey > 0) {
+      fetchedRef.current = false;
+      fetchImages();
+    }
+  }, [refreshKey]);
 
   const fetchImages = async () => {
     try {
+      setLoading(true);
+      
       const { data, error } = await supabase
         .from('tower_images')
-        .select('*')
+        .select('id, tower_id, user_id, image_url, storage_path, is_primary, uploaded_at')
         .eq('tower_id', towerId)
         .order('is_primary', { ascending: false })
         .order('uploaded_at', { ascending: false });
 
       if (error) throw error;
-      setImages(data || []);
+      
+      const imageData = data || [];
+      setImages(imageData);
+      
+      // Cache the results
+      imageCache.set(towerId, imageData);
+      
     } catch (error) {
       console.error('Error fetching images:', error);
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleImageLoad = (imageUrl: string) => {
+    setLoadedImages(prev => new Set(prev).add(imageUrl));
   };
 
   const setPrimaryImage = async (imageId: string) => {
@@ -80,6 +117,9 @@ export default function TowerImageGallery({ towerId, currentUserId, refreshKey }
 
       if (dbError) throw dbError;
 
+      // Clear cache for this tower
+      imageCache.delete(towerId);
+      
       fetchImages(); // Refresh list
     } catch (error) {
       console.error('Error deleting image:', error);
@@ -87,7 +127,8 @@ export default function TowerImageGallery({ towerId, currentUserId, refreshKey }
     }
   };
 
-  if (loading) {
+  // Show cached images immediately, loading indicator only for initial load
+  if (loading && images.length === 0) {
     return (
       <div className="flex justify-center py-8">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
@@ -113,17 +154,30 @@ export default function TowerImageGallery({ towerId, currentUserId, refreshKey }
         {images.map((image) => (
           <div key={image.id} className="relative group">
             <div
-              className="relative aspect-square rounded-lg overflow-hidden cursor-pointer bg-gray-100"
+              className="relative aspect-square rounded-lg overflow-hidden cursor-pointer bg-gray-200"
               onClick={() => setSelectedImage(image.image_url)}
             >
+              {/* Progressive loading: show placeholder until image loads */}
+              {!loadedImages.has(image.image_url) && (
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <div className="animate-spin rounded-full h-6 w-6 border-2 border-gray-400 border-t-transparent"></div>
+                </div>
+              )}
+              
               <img
                 src={image.image_url}
                 alt="Tower"
-                className="w-full h-full object-cover hover:scale-105 transition-transform"
+                loading="lazy"
+                decoding="async"
+                onLoad={() => handleImageLoad(image.image_url)}
+                className={`w-full h-full object-cover hover:scale-105 transition-transform ${
+                  loadedImages.has(image.image_url) ? 'opacity-100' : 'opacity-0'
+                }`}
+                style={{ transition: 'opacity 0.3s ease-in-out' }}
               />
               
               {image.is_primary && (
-                <div className="absolute top-2 left-2 bg-blue-600 text-white px-2 py-1 rounded text-xs font-medium">
+                <div className="absolute top-2 left-2 bg-blue-600 text-white px-2 py-1 rounded text-xs font-medium shadow-lg">
                   Main Photo
                 </div>
               )}
@@ -139,7 +193,7 @@ export default function TowerImageGallery({ towerId, currentUserId, refreshKey }
                           e.stopPropagation();
                           setPrimaryImage(image.id);
                         }}
-                        className="px-3 py-2 bg-blue-600 text-white rounded text-sm hover:bg-blue-700 font-medium"
+                        className="px-3 py-2 bg-blue-600 text-white rounded text-sm hover:bg-blue-700 font-medium shadow-lg"
                         title="Set as main photo"
                       >
                         Set Main
@@ -173,7 +227,7 @@ export default function TowerImageGallery({ towerId, currentUserId, refreshKey }
           onClick={() => setSelectedImage(null)}
         >
           <button
-            className="absolute top-4 right-4 text-white hover:text-gray-300"
+            className="absolute top-4 right-4 text-white hover:text-gray-300 z-10"
             onClick={() => setSelectedImage(null)}
           >
             <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -183,6 +237,7 @@ export default function TowerImageGallery({ towerId, currentUserId, refreshKey }
           <img
             src={selectedImage}
             alt="Tower full size"
+            loading="eager"
             className="max-w-full max-h-full object-contain"
             onClick={(e) => e.stopPropagation()}
           />
