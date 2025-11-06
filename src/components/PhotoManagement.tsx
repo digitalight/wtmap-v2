@@ -45,10 +45,10 @@ export default function PhotoManagement() {
           storage_path,
           uploaded_at,
           is_primary,
-          water_towers!inner (
+          water_towers (
             name
           ),
-          user_profiles!inner (
+          user_profiles (
             email,
             first_name,
             last_name
@@ -56,7 +56,10 @@ export default function PhotoManagement() {
         `)
         .order('uploaded_at', { ascending: false });
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error fetching images:', error);
+        throw error;
+      }
 
       // Transform the data
       const transformedImages = data?.map((img: any) => ({
@@ -67,14 +70,14 @@ export default function PhotoManagement() {
         storage_path: img.storage_path,
         uploaded_at: img.uploaded_at,
         is_primary: img.is_primary,
-        tower: {
+        tower: img.water_towers ? {
           name: img.water_towers.name,
-        },
-        user: {
+        } : undefined,
+        user: img.user_profiles ? {
           email: img.user_profiles.email,
           first_name: img.user_profiles.first_name,
           last_name: img.user_profiles.last_name,
-        },
+        } : undefined,
       })) || [];
 
       setImages(transformedImages);
