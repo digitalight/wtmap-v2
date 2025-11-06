@@ -27,14 +27,46 @@ interface Tower {
   image_uploaded_at?: string;
 }
 
+// Cache for towers data (shared across all instances)
+let cachedTowers: Tower[] | null = null;
+let cacheTimestamp: number | null = null;
+const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+const STORAGE_KEY = 'wtmap_towers_cache';
+const STORAGE_TIMESTAMP_KEY = 'wtmap_towers_timestamp';
+
+// Try to load from localStorage on initialization
+if (typeof window !== 'undefined') {
+  try {
+    const storedData = localStorage.getItem(STORAGE_KEY);
+    const storedTimestamp = localStorage.getItem(STORAGE_TIMESTAMP_KEY);
+    
+    if (storedData && storedTimestamp) {
+      const timestamp = parseInt(storedTimestamp, 10);
+      if (Date.now() - timestamp < CACHE_DURATION) {
+        cachedTowers = JSON.parse(storedData);
+        cacheTimestamp = timestamp;
+      }
+    }
+  } catch (error) {
+    console.error('Error loading cached towers from localStorage:', error);
+  }
+}
+
 export const useTowers = () => {
-  const [towers, setTowers] = useState<Tower[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [towers, setTowers] = useState<Tower[]>(cachedTowers || []); // Use cache initially
+  const [loading, setLoading] = useState(!cachedTowers); // Don't show loading if we have cache
   const [error, setError] = useState<Error | null>(null);
   const supabase = createClientComponentClient();
   const fetchedRef = useRef(false);
 
   useEffect(() => {
+    // If we already have valid cached data, use it
+    if (cachedTowers && cacheTimestamp && Date.now() - cacheTimestamp < CACHE_DURATION) {
+      setTowers(cachedTowers);
+      setLoading(false);
+      return;
+    }
+
     // Prevent duplicate fetches in strict mode
     if (fetchedRef.current) return;
     fetchedRef.current = true;
@@ -72,6 +104,20 @@ export const useTowers = () => {
             tower_images: undefined,
           };
         });
+
+        // Update cache
+        cachedTowers = towersWithImages;
+        cacheTimestamp = Date.now();
+        
+        // Also save to localStorage for persistence across sessions
+        if (typeof window !== 'undefined') {
+          try {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(towersWithImages));
+            localStorage.setItem(STORAGE_TIMESTAMP_KEY, cacheTimestamp.toString());
+          } catch (error) {
+            console.error('Error saving towers to localStorage:', error);
+          }
+        }
         
         setTowers(towersWithImages);
       } catch (err) {
@@ -87,4 +133,18 @@ export const useTowers = () => {
   }, []);
 
   return { towers, loading, error };
+};
+
+// Function to manually clear cache (useful for admin updates)
+export const clearTowersCache = () => {
+  cachedTowers = null;
+  cacheTimestamp = null;
+  if (typeof window !== 'undefined') {
+    try {
+      localStorage.removeItem(STORAGE_KEY);
+      localStorage.removeItem(STORAGE_TIMESTAMP_KEY);
+    } catch (error) {
+      console.error('Error clearing localStorage cache:', error);
+    }
+  }
 };
