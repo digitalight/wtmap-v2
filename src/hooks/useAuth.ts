@@ -28,31 +28,22 @@ export const useAuth = () => {
       if (initRef.current) return;
       initRef.current = true;
 
-      const initAuth = async () => {
+      const getUser = async () => {
         try {
-          // First check session (fast - from cookie/cache)
-          const { data: { session } } = await supabase.auth.getSession();
-          
-          if (session?.user) {
-            // User is logged in - set immediately
-            setUser(session.user);
-            setLoading(false);
-          } else {
-            // Not logged in - verify with getUser
-            const { data: { user } } = await supabase.auth.getUser();
-            setUser(user);
-            setLoading(false);
-          }
+          const {
+            data: { user },
+          } = await supabase.auth.getUser();
+          setUser(user);
         } catch (error) {
-          console.error('Error initializing auth:', error);
+          console.error('Error getting user:', error);
           setUser(null);
+        } finally {
           setLoading(false);
         }
       };
 
-      initAuth();
+      getUser();
 
-      // Listen for auth changes
       const {
         data: { subscription },
       } = supabase.auth.onAuthStateChange((event, session) => {
@@ -61,7 +52,7 @@ export const useAuth = () => {
       });
 
       return () => subscription.unsubscribe();
-    }, [supabase]);
+    }, []);
 
     const signIn = async (email: string, password: string) => {
       const { error } = await supabase.auth.signInWithPassword({
