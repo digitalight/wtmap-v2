@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, createContext, useContext } from 'react';
+import { useState, useEffect, createContext, useContext, useRef } from 'react';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import type { User } from '@supabase/supabase-js';
 
@@ -21,14 +21,25 @@ export const useAuth = () => {
     const [user, setUser] = useState<User | null>(null);
     const [loading, setLoading] = useState(true);
     const supabase = createClientComponentClient();
+    const initRef = useRef(false);
 
     useEffect(() => {
+      // Prevent duplicate initialization in strict mode
+      if (initRef.current) return;
+      initRef.current = true;
+
       const getUser = async () => {
-        const {
-          data: { user },
-        } = await supabase.auth.getUser();
-        setUser(user);
-        setLoading(false);
+        try {
+          const {
+            data: { user },
+          } = await supabase.auth.getUser();
+          setUser(user);
+        } catch (error) {
+          console.error('Error getting user:', error);
+          setUser(null);
+        } finally {
+          setLoading(false);
+        }
       };
 
       getUser();
@@ -41,7 +52,7 @@ export const useAuth = () => {
       });
 
       return () => subscription.unsubscribe();
-    }, [supabase.auth]);
+    }, []);
 
     const signIn = async (email: string, password: string) => {
       const { error } = await supabase.auth.signInWithPassword({

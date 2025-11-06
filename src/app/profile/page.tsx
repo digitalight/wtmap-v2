@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import { useAuth } from '../../hooks/useAuth';
 import Navigation from '../../components/Navigation';
@@ -57,10 +57,14 @@ const ProfilePage = () => {
   const [deletingCommentId, setDeletingCommentId] = useState<string | null>(null);
   const [resetPasswordLoading, setResetPasswordLoading] = useState(false);
   const [resetPasswordMessage, setResetPasswordMessage] = useState<string | null>(null);
+  const [countyProgressLoaded, setCountyProgressLoaded] = useState(false);
   const supabase = createClientComponentClient();
+  const dataFetchedRef = useRef(false);
 
   useEffect(() => {
-    if (user) {
+    // Prevent duplicate fetches in strict mode
+    if (user && !dataFetchedRef.current) {
+      dataFetchedRef.current = true;
       fetchUserData();
     }
   }, [user]);
@@ -139,14 +143,20 @@ const ProfilePage = () => {
         });
       }
 
-      // Fetch county progress data
-      await fetchCountyProgress();
+      // Don't fetch county progress on initial load - only when tab is clicked
     } catch (error) {
       console.error('Error fetching user data:', error);
     } finally {
       setIsLoading(false);
     }
   };
+
+  // Lazy load county progress only when needed
+  useEffect(() => {
+    if (activeTab === 'progress' && !countyProgressLoaded && user) {
+      fetchCountyProgress();
+    }
+  }, [activeTab, user]);
 
   const fetchCountyProgress = async () => {
     if (!user) return;
@@ -205,6 +215,8 @@ const ProfilePage = () => {
       setCountyProgress(progress);
     } catch (error) {
       console.error('Error fetching county progress:', error);
+    } finally {
+      setCountyProgressLoaded(true);
     }
   };
 

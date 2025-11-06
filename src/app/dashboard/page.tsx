@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, Suspense } from 'react';
+import React, { useEffect, Suspense, useMemo } from 'react';
 import { useAuth } from '../../hooks/useAuth';
 import { useTowers } from '../../hooks/useTowers';
 import Map from '../../components/Map';
@@ -15,6 +15,9 @@ function DashboardContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const towerId = searchParams.get('towerId');
+
+  // Memoize towers count to avoid recalculation
+  const towersCount = useMemo(() => towers.length, [towers]);
 
   const handleSignOut = async () => {
     try {
@@ -66,7 +69,7 @@ function DashboardContent() {
   return (
     <div className="dashboard-container bg-gray-50">
       {/* Navigation */}
-      <Navigation towersCount={towers?.length || 0} />
+      <Navigation towersCount={towersCount} />
 
       {/* Map Container */}
       <main className="dashboard-main">

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 
 interface Tower {
@@ -27,22 +27,44 @@ interface Tower {
   image_uploaded_at?: string;
 }
 
+// Cache for towers data (shared across all instances)
+let cachedTowers: Tower[] | null = null;
+let cacheTimestamp: number | null = null;
+const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+
 export const useTowers = () => {
-  const [towers, setTowers] = useState<Tower[]>([]); // Initialize with empty array
-  const [loading, setLoading] = useState(true);
+  const [towers, setTowers] = useState<Tower[]>(cachedTowers || []); // Use cache initially
+  const [loading, setLoading] = useState(!cachedTowers); // Don't show loading if we have cache
   const [error, setError] = useState<Error | null>(null);
   const supabase = createClientComponentClient();
+  const fetchedRef = useRef(false);
 
   useEffect(() => {
+    // If we already have valid cached data, use it
+    if (cachedTowers && cacheTimestamp && Date.now() - cacheTimestamp < CACHE_DURATION) {
+      setTowers(cachedTowers);
+      setLoading(false);
+      return;
+    }
+
+    // Prevent duplicate fetches in strict mode
+    if (fetchedRef.current) return;
+    fetchedRef.current = true;
+
     const fetchTowers = async () => {
       try {
         setLoading(true);
-        setError(null); // Clear previous errors
+        setError(null);
 
+        // Optimized query - only fetch essential fields for map display
         const { data, error } = await supabase
           .from('water_towers')
           .select(`
-            *,
+            id,
+            name,
+            latitude,
+            longitude,
+            county_id,
             tower_images!tower_images_tower_id_fkey(
               image_url,
               is_primary
@@ -58,23 +80,33 @@ export const useTowers = () => {
           const anyImage = tower.tower_images?.[0];
           return {
             ...tower,
-            image_url: primaryImage?.image_url || anyImage?.image_url || tower.image_url,
-            tower_images: undefined, // Remove the joined data from the tower object
+            image_url: primaryImage?.image_url || anyImage?.image_url,
+            tower_images: undefined,
           };
         });
 
+        // Update cache
+        cachedTowers = towersWithImages;
+        cacheTimestamp = Date.now();
+        
         setTowers(towersWithImages);
       } catch (err) {
         console.error('Error fetching towers:', err);
         setError(err as Error);
-        setTowers([]); // Set empty array on error
+        setTowers([]);
       } finally {
         setLoading(false);
       }
     };
 
     fetchTowers();
-  }, [supabase]);
+  }, []);
 
   return { towers, loading, error };
+};
+
+// Function to manually clear cache (useful for admin updates)
+export const clearTowersCache = () => {
+  cachedTowers = null;
+  cacheTimestamp = null;
 };

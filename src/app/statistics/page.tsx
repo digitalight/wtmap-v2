@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import Navigation from '@/components/Navigation';
 import Link from 'next/link';
@@ -34,8 +34,12 @@ export default function StatisticsPage() {
   const [overallStats, setOverallStats] = useState<OverallStats | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const supabase = createClientComponentClient();
+  const fetchedRef = useRef(false);
 
   useEffect(() => {
+    // Prevent duplicate fetches in strict mode
+    if (fetchedRef.current) return;
+    fetchedRef.current = true;
     fetchStatistics();
   }, []);
 
