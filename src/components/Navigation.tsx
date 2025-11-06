@@ -168,6 +168,13 @@ const Navigation: React.FC<NavigationProps> = ({ towersCount = 0 }) => {
                           🗺️ Dashboard
                         </Link>
                         <Link
+                          href="/gallery"
+                          className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors"
+                          onClick={() => setIsDropdownOpen(false)}
+                        >
+                          📷 Gallery
+                        </Link>
+                        <Link
                           href="/profile"
                           className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors"
                           onClick={() => setIsDropdownOpen(false)}
