@@ -24,7 +24,8 @@ interface OverallStats {
   uniqueTowersVisited: number;
   totalTowers: number;
   percentageVisited: number;
-  totalComments: number;
+  totalReviews: number;
+  averageRating: number;
 }
 
 export default function StatisticsPage() {
@@ -52,13 +53,13 @@ export default function StatisticsPage() {
     setIsLoading(true);
     try {
       // Fetch overall statistics
-      const [visitsResult, towersResult, commentsResult] = await Promise.all([
+      const [visitsResult, towersResult, reviewsResult] = await Promise.all([
         // Total visits and unique towers visited
-        supabase.from('user_visits').select('tower_id'),
+        supabase.from('user_visits').select('tower_id, rating'),
         // Total towers
         supabase.from('water_towers').select('id', { count: 'exact', head: true }),
-        // Total comments
-        supabase.from('tower_comments').select('id', { count: 'exact', head: true })
+        // Total reviews (visits with ratings)
+        supabase.from('user_visits').select('rating').not('rating', 'is', null)
       ]);
 
       if (!visitsResult.error && !towersResult.error) {
@@ -66,14 +67,21 @@ export default function StatisticsPage() {
         const uniqueTowersVisited = new Set(visitsResult.data?.map((v: any) => v.tower_id)).size;
         const totalTowers = towersResult.count || 0;
         const percentageVisited = totalTowers > 0 ? (uniqueTowersVisited / totalTowers) * 100 : 0;
-        const totalComments = commentsResult.count || 0;
+        
+        // Calculate reviews and average rating
+        const reviewsWithRatings = reviewsResult.data || [];
+        const totalReviews = reviewsWithRatings.length;
+        const averageRating = totalReviews > 0 
+          ? reviewsWithRatings.reduce((sum: number, r: any) => sum + (r.rating || 0), 0) / totalReviews
+          : 0;
 
         setOverallStats({
           totalVisits,
           uniqueTowersVisited,
           totalTowers,
           percentageVisited,
-          totalComments,
+          totalReviews,
+          averageRating,
         });
       }
 
@@ -245,23 +253,29 @@ export default function StatisticsPage() {
                   </p>
                 </div>
 
-                {/* Total Comments */}
+                {/* Total Reviews */}
                 <div className="bg-white rounded-lg shadow-md p-6">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-sm font-medium text-gray-600">Comments</p>
+                      <p className="text-sm font-medium text-gray-600">Reviews</p>
                       <p className="text-3xl font-bold text-orange-600 mt-1">
-                        {overallStats.totalComments.toLocaleString()}
+                        {overallStats.totalReviews.toLocaleString()}
                       </p>
+                      <div className="flex items-center mt-1">
+                        <span className="text-sm text-yellow-500">★</span>
+                        <span className="text-sm font-medium text-gray-700 ml-1">
+                          {overallStats.averageRating.toFixed(1)} avg
+                        </span>
+                      </div>
                     </div>
                     <div className="bg-orange-100 rounded-full p-3">
                       <svg className="w-8 h-8 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
                       </svg>
                     </div>
                   </div>
                   <p className="text-xs text-gray-500 mt-2">
-                    User reviews and notes
+                    Visits with star ratings
                   </p>
                 </div>
               </div>
