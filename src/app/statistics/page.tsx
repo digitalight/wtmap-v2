@@ -56,19 +56,63 @@ export default function StatisticsPage() {
   const fetchStatistics = async () => {
     setIsLoading(true);
     try {
+      // Use Promise.all to run queries in parallel for better performance
+      const [overallStatsResult, topTowersResult, topUsersResult] = await Promise.all([
+        // Overall statistics - more efficient single query
+        supabase.rpc('get_overall_statistics').single(),
+        // Top towers by visit count - using database aggregation
+        supabase.rpc('get_top_towers', { limit_count: 25 }),
+        // Top users by visit count - using database aggregation  
+        supabase.rpc('get_top_users', { limit_count: 10 })
+      ]);
+
+      // Fallback to manual queries if RPC functions don't exist
+      if (overallStatsResult.error && overallStatsResult.error.code === '42883') {
+        await fetchStatisticsManual();
+        return;
+      }
+
+      // Set overall stats
+      if (overallStatsResult.data) {
+        setOverallStats(overallStatsResult.data as OverallStats);
+      }
+
+      // Set top towers
+      if (topTowersResult.data) {
+        setTopTowers(topTowersResult.data as TowerVisit[]);
+      }
+
+      // Set top users
+      if (topUsersResult.data) {
+        setTopUsers(topUsersResult.data as UserVisit[]);
+      }
+
+    } catch (error) {
+      console.error('Error fetching statistics:', error);
+      // Fallback to manual queries
+      await fetchStatisticsManual();
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Fallback manual queries (slower but works without RPC functions)
+  const fetchStatisticsManual = async () => {
+    try {
       // Fetch overall statistics
       const [visitsResult, towersResult, reviewsResult] = await Promise.all([
-        // Total visits and unique towers visited
-        supabase.from('user_visits').select('tower_id, rating'),
+        // Use count instead of fetching all data
+        supabase.from('user_visits').select('tower_id', { count: 'exact', head: false }),
         // Total towers
         supabase.from('water_towers').select('id', { count: 'exact', head: true }),
-        // Total reviews (visits with ratings)
-        supabase.from('user_visits').select('rating').not('rating', 'is', null)
+        // Total reviews (visits with ratings) - only fetch rating column
+        supabase.from('user_visits').select('rating', { count: 'exact', head: false }).not('rating', 'is', null)
       ]);
 
       if (!visitsResult.error && !towersResult.error) {
-        const totalVisits = visitsResult.data?.length || 0;
-        const uniqueTowersVisited = new Set(visitsResult.data?.map((v: any) => v.tower_id)).size;
+        const visits = visitsResult.data || [];
+        const totalVisits = visits.length;
+        const uniqueTowersVisited = new Set(visits.map((v: any) => v.tower_id)).size;
         const totalTowers = towersResult.count || 0;
         const percentageVisited = totalTowers > 0 ? (uniqueTowersVisited / totalTowers) * 100 : 0;
         
@@ -89,7 +133,7 @@ export default function StatisticsPage() {
         });
       }
 
-      // Fetch top 25 towers with most visits
+      // Fetch top 25 towers with most visits - more efficient aggregation query
       const { data: towerData, error: towerError } = await supabase
         .from('user_visits')
         .select('tower_id, water_towers(name)')
