@@ -15,24 +15,42 @@ interface UserProfile {
   last_name?: string | null;
 }
 
+// Cache user profiles in memory to avoid repeated fetches
+const userProfileCache = new Map<string, UserProfile>();
+
 const Navigation: React.FC<NavigationProps> = ({ towersCount = 0 }) => {
   const { user, signOut } = useAuth();
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const fetchedRef = useRef(false);
   const router = useRouter();
   const supabase = createClientComponentClient();
 
-  // Fetch user profile for name display
+  // Fetch user profile for name display with caching
   useEffect(() => {
     const fetchUserProfile = async () => {
-      if (user?.id) {
-        const { data } = await supabase
-          .from('user_profiles')
-          .select('first_name, last_name')
-          .eq('id', user.id)
-          .single();
-        
+      if (!user?.id) return;
+
+      // Check cache first
+      const cached = userProfileCache.get(user.id);
+      if (cached) {
+        setUserProfile(cached);
+        return;
+      }
+
+      // Prevent duplicate fetches
+      if (fetchedRef.current) return;
+      fetchedRef.current = true;
+
+      const { data } = await supabase
+        .from('user_profiles')
+        .select('first_name, last_name')
+        .eq('id', user.id)
+        .single();
+      
+      if (data) {
+        userProfileCache.set(user.id, data);
         setUserProfile(data);
       }
     };
