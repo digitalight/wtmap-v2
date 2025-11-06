@@ -66,6 +66,22 @@ export default function StatisticsPage() {
         supabase.rpc('get_top_users', { limit_count: 10 })
       ]);
 
+      // Debug logging
+      console.log('Overall Stats Result:', overallStatsResult);
+      console.log('Top Towers Result:', topTowersResult);
+      console.log('Top Users Result:', topUsersResult);
+
+      // Check for errors
+      if (overallStatsResult.error) {
+        console.error('Overall stats error:', overallStatsResult.error);
+      }
+      if (topTowersResult.error) {
+        console.error('Top towers error:', topTowersResult.error);
+      }
+      if (topUsersResult.error) {
+        console.error('Top users error:', topUsersResult.error);
+      }
+
       // Fallback to manual queries if RPC functions don't exist
       if (overallStatsResult.error && overallStatsResult.error.code === '42883') {
         await fetchStatisticsManual();
