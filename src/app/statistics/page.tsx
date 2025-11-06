@@ -19,9 +19,18 @@ interface UserVisit {
   visit_count: number;
 }
 
+interface OverallStats {
+  totalVisits: number;
+  uniqueTowersVisited: number;
+  totalTowers: number;
+  percentageVisited: number;
+  totalComments: number;
+}
+
 export default function StatisticsPage() {
   const [topTowers, setTopTowers] = useState<TowerVisit[]>([]);
   const [topUsers, setTopUsers] = useState<UserVisit[]>([]);
+  const [overallStats, setOverallStats] = useState<OverallStats | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const supabase = createClientComponentClient();
 
@@ -42,6 +51,32 @@ export default function StatisticsPage() {
   const fetchStatistics = async () => {
     setIsLoading(true);
     try {
+      // Fetch overall statistics
+      const [visitsResult, towersResult, commentsResult] = await Promise.all([
+        // Total visits and unique towers visited
+        supabase.from('user_visits').select('tower_id'),
+        // Total towers
+        supabase.from('water_towers').select('id', { count: 'exact', head: true }),
+        // Total comments
+        supabase.from('tower_comments').select('id', { count: 'exact', head: true })
+      ]);
+
+      if (!visitsResult.error && !towersResult.error) {
+        const totalVisits = visitsResult.data?.length || 0;
+        const uniqueTowersVisited = new Set(visitsResult.data?.map((v: any) => v.tower_id)).size;
+        const totalTowers = towersResult.count || 0;
+        const percentageVisited = totalTowers > 0 ? (uniqueTowersVisited / totalTowers) * 100 : 0;
+        const totalComments = commentsResult.count || 0;
+
+        setOverallStats({
+          totalVisits,
+          uniqueTowersVisited,
+          totalTowers,
+          percentageVisited,
+          totalComments,
+        });
+      }
+
       // Fetch top 25 towers with most visits
       const { data: towerData, error: towerError } = await supabase
         .from('user_visits')
@@ -146,7 +181,93 @@ export default function StatisticsPage() {
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
           </div>
         ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          <>
+            {/* Overall Statistics Cards */}
+            {overallStats && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+                {/* Total Visits */}
+                <div className="bg-white rounded-lg shadow-md p-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-gray-600">Total Visits</p>
+                      <p className="text-3xl font-bold text-blue-600 mt-1">
+                        {overallStats.totalVisits.toLocaleString()}
+                      </p>
+                    </div>
+                    <div className="bg-blue-100 rounded-full p-3">
+                      <svg className="w-8 h-8 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                      </svg>
+                    </div>
+                  </div>
+                  <p className="text-xs text-gray-500 mt-2">
+                    Across all towers and users
+                  </p>
+                </div>
+
+                {/* Towers Visited */}
+                <div className="bg-white rounded-lg shadow-md p-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-gray-600">Towers Visited</p>
+                      <p className="text-3xl font-bold text-green-600 mt-1">
+                        {overallStats.uniqueTowersVisited}
+                      </p>
+                      <p className="text-sm text-gray-500">
+                        of {overallStats.totalTowers}
+                      </p>
+                    </div>
+                    <div className="bg-green-100 rounded-full p-3">
+                      <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                      </svg>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Percentage Visited */}
+                <div className="bg-white rounded-lg shadow-md p-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-gray-600">Coverage</p>
+                      <p className="text-3xl font-bold text-purple-600 mt-1">
+                        {overallStats.percentageVisited.toFixed(1)}%
+                      </p>
+                    </div>
+                    <div className="bg-purple-100 rounded-full p-3">
+                      <svg className="w-8 h-8 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                      </svg>
+                    </div>
+                  </div>
+                  <p className="text-xs text-gray-500 mt-2">
+                    Towers with at least one visit
+                  </p>
+                </div>
+
+                {/* Total Comments */}
+                <div className="bg-white rounded-lg shadow-md p-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-gray-600">Comments</p>
+                      <p className="text-3xl font-bold text-orange-600 mt-1">
+                        {overallStats.totalComments.toLocaleString()}
+                      </p>
+                    </div>
+                    <div className="bg-orange-100 rounded-full p-3">
+                      <svg className="w-8 h-8 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
+                      </svg>
+                    </div>
+                  </div>
+                  <p className="text-xs text-gray-500 mt-2">
+                    User reviews and notes
+                  </p>
+                </div>
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
             {/* Top Towers Section */}
             <div className="bg-white rounded-lg shadow-md p-6">
               <h2 className="text-2xl font-semibold text-gray-800 mb-4">
@@ -266,6 +387,7 @@ export default function StatisticsPage() {
               )}
             </div>
           </div>
+          </>
         )}
       </div>
     </div>
