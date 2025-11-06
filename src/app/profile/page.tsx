@@ -55,6 +55,8 @@ const ProfilePage = () => {
   const [activeTab, setActiveTab] = useState<'overview' | 'visits' | 'comments' | 'progress'>('overview');
   const [isLoading, setIsLoading] = useState(true);
   const [deletingCommentId, setDeletingCommentId] = useState<string | null>(null);
+  const [resetPasswordLoading, setResetPasswordLoading] = useState(false);
+  const [resetPasswordMessage, setResetPasswordMessage] = useState<string | null>(null);
   const supabase = createClientComponentClient();
 
   useEffect(() => {
@@ -241,6 +243,32 @@ const ProfilePage = () => {
     }
   };
 
+  const handleResetPassword = async () => {
+    if (!user?.email) return;
+
+    setResetPasswordLoading(true);
+    setResetPasswordMessage(null);
+
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(user.email, {
+        redirectTo: `${window.location.origin}/profile`,
+      });
+
+      if (error) {
+        setResetPasswordMessage(`Error: ${error.message}`);
+      } else {
+        setResetPasswordMessage('Password reset email sent! Check your inbox.');
+      }
+    } catch (error) {
+      console.error('Error sending password reset email:', error);
+      setResetPasswordMessage('Failed to send password reset email. Please try again.');
+    } finally {
+      setResetPasswordLoading(false);
+      // Clear message after 5 seconds
+      setTimeout(() => setResetPasswordMessage(null), 5000);
+    }
+  };
+
   const getStarRating = (rating: number) => {
     return '⭐'.repeat(rating) + '☆'.repeat(5 - rating);
   };
@@ -279,14 +307,38 @@ const ProfilePage = () => {
       <div className="max-w-4xl mx-auto px-4 py-8">
         {/* Profile Header */}
         <div className="bg-white rounded-lg shadow p-6 mb-6">
-          <div className="flex items-center space-x-4">
-            <div className="w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center text-white text-xl font-bold">
-              {user.email?.[0]?.toUpperCase() || 'U'}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-4">
+              <div className="w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center text-white text-xl font-bold">
+                {user.email?.[0]?.toUpperCase() || 'U'}
+              </div>
+              <div>
+                <h1 className="text-2xl font-bold text-gray-900">{user.email}</h1>
+                <p className="text-gray-600">Water Tower Explorer</p>
+              </div>
             </div>
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900">{user.email}</h1>
-              <p className="text-gray-600">Water Tower Explorer</p>
-            </div>
+            
+            {/* Show Reset Password button only for email/password users (not OAuth) */}
+            {user.app_metadata?.provider === 'email' && (
+              <div className="flex flex-col items-end">
+                <button
+                  onClick={handleResetPassword}
+                  disabled={resetPasswordLoading}
+                  className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  {resetPasswordLoading ? 'Sending...' : 'Reset Password'}
+                </button>
+                {resetPasswordMessage && (
+                  <p className={`text-sm mt-2 ${
+                    resetPasswordMessage.includes('Error') 
+                      ? 'text-red-600' 
+                      : 'text-green-600'
+                  }`}>
+                    {resetPasswordMessage}
+                  </p>
+                )}
+              </div>
+            )}
           </div>
         </div>
 
