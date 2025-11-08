@@ -22,6 +22,11 @@ interface TowerImageGalleryProps {
 // Cache for tower images
 const imageCache = new Map<string, TowerImage[]>();
 
+// Export function to clear image cache (useful after bulk operations)
+export function clearImageCache() {
+  imageCache.clear();
+}
+
 export default function TowerImageGallery({ towerId, currentUserId, refreshKey }: TowerImageGalleryProps) {
   const [images, setImages] = useState<TowerImage[]>(imageCache.get(towerId) || []);
   const [loading, setLoading] = useState(!imageCache.has(towerId));

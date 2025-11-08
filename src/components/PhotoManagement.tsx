@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import { clearTowersCache } from '@/hooks/useTowers';
+import { clearImageCache } from './TowerImageGallery';
 
 interface TowerImage {
   id: string;
@@ -173,16 +175,20 @@ export default function PhotoManagement() {
 
       if (uploadError) throw uploadError;
 
-      // Get the new public URL
+      // Get the new public URL with cache-busting parameter
       const { data: urlData } = supabase.storage
         .from('tower-images')
         .getPublicUrl(newPath);
+
+      // Add cache-busting timestamp to URL
+      const timestamp = Date.now();
+      const newImageUrl = `${urlData.publicUrl}?t=${timestamp}`;
 
       // Update database record
       const { error: updateError } = await supabase
         .from('tower_images')
         .update({
-          image_url: urlData.publicUrl,
+          image_url: newImageUrl,
           storage_path: newPath,
         })
         .eq('id', image.id);
@@ -245,6 +251,10 @@ export default function PhotoManagement() {
     setConversionProgress({ current: 0, total: 0 });
     
     alert(`Conversion complete!\n✅ Success: ${successCount}\n❌ Failed: ${failCount}`);
+    
+    // Clear all image caches to ensure updated images show everywhere
+    clearTowersCache();
+    clearImageCache();
     
     // Refresh the list
     await fetchImages();
