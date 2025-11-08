@@ -3,6 +3,8 @@
 import React, { useState, useRef } from 'react';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import { optimizeImage, validateImageFile, generateFileName, getFileExtension } from '@/utils/imageUpload';
+import { clearTowersCache } from '@/hooks/useTowers';
+import { clearImageCache } from './TowerImageGallery';
 
 interface TowerImageUploadProps {
   towerId: string;
@@ -90,6 +92,10 @@ export default function TowerImageUpload({ towerId, userId, onImageUploaded }: T
         });
 
       if (dbError) throw dbError;
+
+      // Clear caches so new image shows up immediately
+      clearTowersCache();
+      clearImageCache();
 
       // Callback
       if (onImageUploaded) {

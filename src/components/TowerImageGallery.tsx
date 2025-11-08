@@ -54,6 +54,8 @@ export default function TowerImageGallery({ towerId, currentUserId, refreshKey }
   // Refetch when refreshKey changes (after upload)
   useEffect(() => {
     if (refreshKey && refreshKey > 0) {
+      // Clear cache for this tower to force fresh fetch
+      imageCache.delete(towerId);
       fetchedRef.current = false;
       fetchImages();
     }
