@@ -201,21 +201,26 @@ export default function PhotoManagement() {
 
       console.log(`New public URL: ${urlData.publicUrl}`);
 
-      // Update database record (store clean URL without cache-busting)
-      const { data: updateData, error: updateError } = await supabase
-        .from('tower_images')
-        .update({
-          image_url: urlData.publicUrl,
-          storage_path: newPath,
-        })
-        .eq('id', image.id)
-        .select();
+      // Update database record using admin API (bypasses RLS)
+      const updateResponse = await fetch('/api/admin/convert-image', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          imageId: image.id,
+          newImageUrl: urlData.publicUrl,
+          newStoragePath: newPath,
+        }),
+      });
 
-      if (updateError) {
-        console.error('Database update error:', updateError);
-        throw updateError;
+      if (!updateResponse.ok) {
+        const errorData = await updateResponse.json();
+        throw new Error(`Database update failed: ${errorData.error}`);
       }
-      console.log('Database updated:', updateData);
+
+      const updateResult = await updateResponse.json();
+      console.log('Database updated via API:', updateResult.data);
 
       // Delete old image from storage
       const { error: deleteError } = await supabase.storage
@@ -300,14 +305,19 @@ export default function PhotoManagement() {
           // Test if image loads
           const response = await fetch(image.image_url, { method: 'HEAD' });
           if (!response.ok || response.headers.get('content-length') === '0') {
-            // Image appears corrupt, delete from database
-            const { error } = await supabase
-              .from('tower_images')
-              .delete()
-              .eq('id', image.id);
+            // Image appears corrupt, delete from database using admin API
+            const deleteResponse = await fetch('/api/admin/delete-image', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                imageId: image.id,
+              }),
+            });
 
-            if (error) {
-              console.error('Failed to delete corrupt image:', image.id, error);
+            if (!deleteResponse.ok) {
+              console.error('Failed to delete corrupt image:', image.id);
               failedCount++;
             } else {
               console.log('Deleted corrupt image:', image.id);
@@ -316,13 +326,18 @@ export default function PhotoManagement() {
           }
         } catch (err) {
           // If fetch fails, image is likely corrupt
-          const { error } = await supabase
-            .from('tower_images')
-            .delete()
-            .eq('id', image.id);
+          const deleteResponse = await fetch('/api/admin/delete-image', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              imageId: image.id,
+            }),
+          });
 
-          if (error) {
-            console.error('Failed to delete corrupt image:', image.id, error);
+          if (!deleteResponse.ok) {
+            console.error('Failed to delete corrupt image:', image.id);
             failedCount++;
           } else {
             console.log('Deleted corrupt image:', image.id);
@@ -366,15 +381,20 @@ export default function PhotoManagement() {
         console.log('Storage deletion successful');
       }
 
-      // Delete from database (this should always work)
-      const { error: dbError } = await supabase
-        .from('tower_images')
-        .delete()
-        .eq('id', image.id);
+      // Delete from database using admin API (bypasses RLS)
+      const deleteResponse = await fetch('/api/admin/delete-image', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          imageId: image.id,
+        }),
+      });
 
-      if (dbError) {
-        console.error('Database deletion failed:', dbError);
-        throw dbError;
+      if (!deleteResponse.ok) {
+        const errorData = await deleteResponse.json();
+        throw new Error(`Database deletion failed: ${errorData.error}`);
       }
 
       console.log('Database deletion successful');
