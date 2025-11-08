@@ -48,16 +48,16 @@ export default function TowerImageUpload({ towerId, userId, onImageUploaded }: T
     setError(null);
 
     try {
-      // Optimize image
+      // Optimize image - always convert to WebP
       const optimized = await optimizeImage(file, {
         maxWidth: 900,
         maxHeight: 900,
-        quality: 0.75,
+        quality: 0.8, // Target 100-150kb
         format: 'webp',
       });
 
-      // Generate file name
-      const extension = getFileExtension(file, optimized);
+      // Generate file name - always use webp extension
+      const extension = getFileExtension(file, optimized, 'webp');
       const filePath = generateFileName(towerId, userId, extension);
 
       // Upload to Supabase Storage

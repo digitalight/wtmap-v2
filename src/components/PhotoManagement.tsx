@@ -26,6 +26,8 @@ export default function PhotoManagement() {
   const [isLoading, setIsLoading] = useState(true);
   const [selectedImage, setSelectedImage] = useState<TowerImage | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isConverting, setIsConverting] = useState(false);
+  const [conversionProgress, setConversionProgress] = useState({ current: 0, total: 0 });
   const supabase = createClientComponentClient();
 
   useEffect(() => {
@@ -102,6 +104,152 @@ export default function PhotoManagement() {
     }
   };
 
+  const convertImageToWebP = async (image: TowerImage): Promise<boolean> => {
+    try {
+      // Download the image
+      const response = await fetch(image.image_url);
+      const blob = await response.blob();
+
+      // Convert to WebP
+      const img = new Image();
+      const imageUrl = URL.createObjectURL(blob);
+      
+      await new Promise((resolve, reject) => {
+        img.onload = resolve;
+        img.onerror = reject;
+        img.src = imageUrl;
+      });
+
+      // Create canvas and convert to WebP
+      const canvas = document.createElement('canvas');
+      let width = img.width;
+      let height = img.height;
+
+      // Resize if necessary (max 900x900)
+      if (width > 900 || height > 900) {
+        const ratio = Math.min(900 / width, 900 / height);
+        width = Math.round(width * ratio);
+        height = Math.round(height * ratio);
+      }
+
+      canvas.width = width;
+      canvas.height = height;
+      
+      const ctx = canvas.getContext('2d');
+      if (!ctx) throw new Error('Failed to get canvas context');
+
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
+      ctx.drawImage(img, 0, 0, width, height);
+
+      // Convert to WebP blob with target quality
+      const webpBlob = await new Promise<Blob>((resolve, reject) => {
+        canvas.toBlob(
+          (blob) => {
+            if (blob) resolve(blob);
+            else reject(new Error('Failed to create WebP blob'));
+          },
+          'image/webp',
+          0.8 // Target 100-150kb
+        );
+      });
+
+      URL.revokeObjectURL(imageUrl);
+
+      // Generate new WebP filename
+      const pathParts = image.storage_path.split('/');
+      const oldFilename = pathParts[pathParts.length - 1];
+      const newFilename = oldFilename.replace(/\.(jpg|jpeg|png)$/i, '.webp');
+      const newPath = pathParts.slice(0, -1).concat(newFilename).join('/');
+
+      // Upload the new WebP image
+      const { error: uploadError } = await supabase.storage
+        .from('tower-images')
+        .upload(newPath, webpBlob, {
+          contentType: 'image/webp',
+          cacheControl: '3600',
+          upsert: true,
+        });
+
+      if (uploadError) throw uploadError;
+
+      // Get the new public URL
+      const { data: urlData } = supabase.storage
+        .from('tower-images')
+        .getPublicUrl(newPath);
+
+      // Update database record
+      const { error: updateError } = await supabase
+        .from('tower_images')
+        .update({
+          image_url: urlData.publicUrl,
+          storage_path: newPath,
+        })
+        .eq('id', image.id);
+
+      if (updateError) throw updateError;
+
+      // Delete old image from storage
+      const { error: deleteError } = await supabase.storage
+        .from('tower-images')
+        .remove([image.storage_path]);
+
+      if (deleteError) {
+        console.warn('Failed to delete old image:', deleteError);
+      }
+
+      return true;
+    } catch (error) {
+      console.error('Error converting image:', error);
+      return false;
+    }
+  };
+
+  const handleBulkConversion = async () => {
+    // Find all non-WebP images
+    const nonWebpImages = images.filter(img => 
+      !img.storage_path.toLowerCase().endsWith('.webp') &&
+      (img.storage_path.toLowerCase().endsWith('.jpg') ||
+       img.storage_path.toLowerCase().endsWith('.jpeg') ||
+       img.storage_path.toLowerCase().endsWith('.png'))
+    );
+
+    if (nonWebpImages.length === 0) {
+      alert('All images are already in WebP format!');
+      return;
+    }
+
+    if (!confirm(`Convert ${nonWebpImages.length} images to WebP format? This may take a few minutes.`)) {
+      return;
+    }
+
+    setIsConverting(true);
+    setConversionProgress({ current: 0, total: nonWebpImages.length });
+
+    let successCount = 0;
+    let failCount = 0;
+
+    for (let i = 0; i < nonWebpImages.length; i++) {
+      const image = nonWebpImages[i];
+      setConversionProgress({ current: i + 1, total: nonWebpImages.length });
+      
+      const success = await convertImageToWebP(image);
+      if (success) {
+        successCount++;
+      } else {
+        failCount++;
+      }
+    }
+
+    setIsConverting(false);
+    setConversionProgress({ current: 0, total: 0 });
+    
+    alert(`Conversion complete!\n✅ Success: ${successCount}\n❌ Failed: ${failCount}`);
+    
+    // Refresh the list
+    await fetchImages();
+  };
+
   const handleDeleteImage = async (image: TowerImage) => {
     if (!confirm(`Are you sure you want to delete this image of "${image.tower?.name}"?`)) {
       return;
@@ -157,10 +305,30 @@ export default function PhotoManagement() {
   return (
     <div>
       <div className="mb-6">
-        <h2 className="text-2xl font-semibold text-gray-900">Photo Management</h2>
-        <p className="text-gray-600 mt-1">
-          Manage and moderate user-uploaded photos ({images.length} total)
-        </p>
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-2xl font-semibold text-gray-900">Photo Management</h2>
+            <p className="text-gray-600 mt-1">
+              Manage and moderate user-uploaded photos ({images.length} total)
+            </p>
+          </div>
+          <button
+            onClick={handleBulkConversion}
+            disabled={isConverting}
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+          >
+            {isConverting ? (
+              <>
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                Converting {conversionProgress.current}/{conversionProgress.total}...
+              </>
+            ) : (
+              <>
+                🔄 Convert JPEGs to WebP
+              </>
+            )}
+          </button>
+        </div>
       </div>
 
       {images.length === 0 ? (
@@ -188,6 +356,9 @@ export default function PhotoManagement() {
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Date
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Format
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Status
@@ -231,6 +402,21 @@ export default function PhotoManagement() {
                       <div className="text-xs text-gray-500">
                         {new Date(image.uploaded_at).toLocaleTimeString()}
                       </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      {(() => {
+                        const ext = image.storage_path.split('.').pop()?.toUpperCase() || 'UNKNOWN';
+                        const isWebP = ext === 'WEBP';
+                        return (
+                          <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                            isWebP 
+                              ? 'bg-green-100 text-green-800' 
+                              : 'bg-yellow-100 text-yellow-800'
+                          }`}>
+                            {ext}
+                          </span>
+                        );
+                      })()}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       {image.is_primary && (

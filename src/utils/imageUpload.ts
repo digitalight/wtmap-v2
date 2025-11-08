@@ -13,7 +13,7 @@ export interface ImageUploadOptions {
 const DEFAULT_OPTIONS: ImageUploadOptions = {
   maxWidth: 900,
   maxHeight: 900,
-  quality: 0.75,
+  quality: 0.8, // Target 100-150kb
   format: 'webp',
 };
 
@@ -152,12 +152,15 @@ export function generateFileName(towerId: string, userId: string, extension: str
 
 /**
  * Gets the file extension from a file name or blob type
+ * Always returns the target format from optimization
  */
-export function getFileExtension(file: File, optimized?: Blob): string {
-  if (optimized?.type === 'image/webp') return 'webp';
-  if (optimized?.type === 'image/jpeg') return 'jpg';
+export function getFileExtension(file: File, optimized?: Blob, targetFormat: string = 'webp'): string {
+  // Always use the target format for optimized images
+  if (optimized) {
+    return targetFormat === 'webp' ? 'webp' : 'jpg';
+  }
   
-  // Fallback to original file extension
+  // Fallback to original file extension only if no optimization occurred
   const parts = file.name.split('.');
   return parts[parts.length - 1].toLowerCase();
 }
