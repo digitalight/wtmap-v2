@@ -52,20 +52,18 @@ export default function TowerImageUpload({ towerId, userId, onImageUploaded }: T
     try {
       console.log('Starting upload for file:', file.name, file.type, file.size);
       
-      // Optimize image - always convert to WebP
+      // Optimize image - always convert to WebP with adaptive quality
       const optimized = await optimizeImage(file, {
         maxWidth: 900,
         maxHeight: 900,
-        quality: 0.8, // Target 100-150kb
+        quality: 0.8, // Starting quality, will adjust down if needed
         format: 'webp',
       });
 
-      console.log('Optimization complete, blob size:', optimized.size);
-
-      // Double-check blob size before upload
-      if (optimized.size < 10240) {
-        throw new Error('Optimized image is too small. This may be a Live Photo - please disable Live Photo mode in your camera settings and try again.');
-      }
+      console.log('Optimization complete:', { 
+        size: optimized.size, 
+        sizeKB: Math.round(optimized.size / 1024) 
+      });
 
       // Generate file name - always use webp extension
       const extension = getFileExtension(file, optimized, 'webp');
@@ -172,13 +170,13 @@ export default function TowerImageUpload({ towerId, userId, onImageUploaded }: T
         </div>
 
         <p className="mt-1 text-xs text-gray-500">
-          JPEG, PNG, WebP, or HEIC • Max 10MB • Will be optimized automatically
+          JPEG, PNG, WebP, or HEIC • Max 10MB • Automatically optimized to WebP (target 100-150KB)
         </p>
         
-        {/* iPhone Live Photo warning */}
-        <div className="mt-2 p-2 bg-yellow-50 border border-yellow-200 rounded-lg">
-          <p className="text-xs text-yellow-800">
-            <strong>iPhone users:</strong> If your upload fails or produces small/broken files, please disable <strong>Live Photo</strong> mode in your camera before taking pictures. Live Photos are not supported.
+        {/* iPhone Live Photo info */}
+        <div className="mt-2 p-2 bg-blue-50 border border-blue-200 rounded-lg">
+          <p className="text-xs text-blue-800">
+            <strong>📱 iPhone Live Photos:</strong> Supported! We automatically extract the still image. If upload fails, try disabling Live Photo mode temporarily.
           </p>
         </div>
       </div>

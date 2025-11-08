@@ -18,10 +18,13 @@ const DEFAULT_OPTIONS: ImageUploadOptions = {
 };
 
 /**
- * Converts HEIC images to JPEG
+ * Converts HEIC images (including Live Photos) to JPEG
+ * Live Photos are HEIC files with motion data - we extract just the still frame
  */
 async function convertHeicToJpeg(file: File): Promise<Blob> {
   try {
+    console.log('Converting HEIC/Live Photo to JPEG...');
+    
     // Dynamically import heic2any to avoid issues with SSR
     const heic2any = (await import('heic2any')).default;
     
@@ -31,11 +34,19 @@ async function convertHeicToJpeg(file: File): Promise<Blob> {
       quality: 0.9,
     });
 
-    // heic2any can return an array of blobs, so handle both cases
-    return Array.isArray(convertedBlob) ? convertedBlob[0] : convertedBlob;
+    // heic2any can return an array of blobs for Live Photos, take the first (still) frame
+    const resultBlob = Array.isArray(convertedBlob) ? convertedBlob[0] : convertedBlob;
+    
+    console.log('HEIC conversion successful:', {
+      originalSize: file.size,
+      convertedSize: resultBlob.size,
+      type: resultBlob.type
+    });
+    
+    return resultBlob;
   } catch (error) {
     console.error('Error converting HEIC:', error);
-    throw new Error('Failed to convert HEIC image. Please try a different image.');
+    throw new Error('Failed to convert image. Please try taking a new photo with Live Photo disabled, or select a different image.');
   }
 }
 
@@ -108,33 +119,66 @@ export async function optimizeImage(
         
         ctx.drawImage(img, 0, 0, width, height);
 
-        // Convert to blob with quality adjustments for WebP
-        const quality = opts.format === 'webp' ? opts.quality : 0.9;
+        // Convert to blob with adaptive quality to target 100-150KB
+        let quality = opts.quality!;
+        const targetMaxSize = 150 * 1024; // 150KB
         
-        canvas.toBlob(
-          (blob) => {
-            if (blob) {
-              console.log('Blob created:', { 
-                size: blob.size, 
-                type: blob.type,
-                sizeKB: Math.round(blob.size / 1024) 
-              });
-              
-              // Validate blob size (should be at least 10KB for a real image)
-              if (blob.size < 10240) {
-                console.error('Blob too small, likely corrupt:', blob.size);
-                reject(new Error('Generated image is too small (possibly corrupt)'));
-                return;
-              }
-              
-              resolve(blob);
-            } else {
-              reject(new Error('Failed to create blob'));
-            }
-          },
-          `image/${opts.format}`,
-          quality
-        );
+        const tryConversion = (currentQuality: number): Promise<Blob> => {
+          return new Promise((resolveBlob, rejectBlob) => {
+            canvas.toBlob(
+              (blob) => {
+                if (blob) {
+                  resolveBlob(blob);
+                } else {
+                  rejectBlob(new Error('Failed to create blob'));
+                }
+              },
+              `image/${opts.format}`,
+              currentQuality
+            );
+          });
+        };
+
+        // Try conversion with quality adjustment
+        const convertWithQuality = async () => {
+          let blob = await tryConversion(quality);
+          let attempts = 0;
+          const maxAttempts = 3;
+
+          console.log('Initial conversion:', { 
+            size: blob.size, 
+            sizeKB: Math.round(blob.size / 1024),
+            quality 
+          });
+
+          // If blob is too large, reduce quality
+          while (blob.size > targetMaxSize && quality > 0.5 && attempts < maxAttempts) {
+            attempts++;
+            quality = Math.max(0.5, quality - 0.1);
+            console.log(`Attempt ${attempts}: Reducing quality to ${quality.toFixed(2)}`);
+            blob = await tryConversion(quality);
+            console.log(`New size: ${Math.round(blob.size / 1024)}KB`);
+          }
+
+          // Validate minimum size
+          if (blob.size < 10240) {
+            console.error('Blob too small, likely corrupt:', blob.size);
+            throw new Error('Generated image is too small. This may be a Live Photo issue. Try disabling Live Photo in your camera settings.');
+          }
+
+          console.log('Final blob:', { 
+            size: blob.size, 
+            type: blob.type,
+            sizeKB: Math.round(blob.size / 1024),
+            quality: quality.toFixed(2)
+          });
+
+          return blob;
+        };
+
+        convertWithQuality()
+          .then(resolve)
+          .catch(reject);
       };
 
       img.onerror = () => {
