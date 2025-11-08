@@ -108,9 +108,20 @@ export default function PhotoManagement() {
 
   const convertImageToWebP = async (image: TowerImage): Promise<boolean> => {
     try {
+      console.log(`Converting image ${image.id}:`, image.storage_path);
+      
       // Download the image
       const response = await fetch(image.image_url);
+      if (!response.ok) {
+        throw new Error(`Failed to fetch image: ${response.status} ${response.statusText}`);
+      }
       const blob = await response.blob();
+      console.log(`Downloaded blob size: ${blob.size} bytes, type: ${blob.type}`);
+
+      // Check if blob is valid
+      if (blob.size === 0) {
+        throw new Error('Downloaded image is empty');
+      }
 
       // Convert to WebP
       const img = new Image();
@@ -118,9 +129,11 @@ export default function PhotoManagement() {
       
       await new Promise((resolve, reject) => {
         img.onload = resolve;
-        img.onerror = reject;
+        img.onerror = () => reject(new Error('Failed to load image for canvas conversion'));
         img.src = imageUrl;
       });
+
+      console.log(`Image loaded: ${img.width}x${img.height}`);
 
       // Create canvas and convert to WebP
       const canvas = document.createElement('canvas');
@@ -157,12 +170,14 @@ export default function PhotoManagement() {
       });
 
       URL.revokeObjectURL(imageUrl);
+      console.log(`WebP blob created: ${webpBlob.size} bytes`);
 
       // Generate new WebP filename
       const pathParts = image.storage_path.split('/');
       const oldFilename = pathParts[pathParts.length - 1];
       const newFilename = oldFilename.replace(/\.(jpg|jpeg|png)$/i, '.webp');
       const newPath = pathParts.slice(0, -1).concat(newFilename).join('/');
+      console.log(`New path: ${newPath}`);
 
       // Upload the new WebP image
       const { error: uploadError } = await supabase.storage
@@ -173,27 +188,34 @@ export default function PhotoManagement() {
           upsert: true,
         });
 
-      if (uploadError) throw uploadError;
+      if (uploadError) {
+        console.error('Upload error:', uploadError);
+        throw uploadError;
+      }
+      console.log('Upload successful');
 
-      // Get the new public URL with cache-busting parameter
+      // Get the new public URL (without cache-busting for storage)
       const { data: urlData } = supabase.storage
         .from('tower-images')
         .getPublicUrl(newPath);
 
-      // Add cache-busting timestamp to URL
-      const timestamp = Date.now();
-      const newImageUrl = `${urlData.publicUrl}?t=${timestamp}`;
+      console.log(`New public URL: ${urlData.publicUrl}`);
 
-      // Update database record
-      const { error: updateError } = await supabase
+      // Update database record (store clean URL without cache-busting)
+      const { data: updateData, error: updateError } = await supabase
         .from('tower_images')
         .update({
-          image_url: newImageUrl,
+          image_url: urlData.publicUrl,
           storage_path: newPath,
         })
-        .eq('id', image.id);
+        .eq('id', image.id)
+        .select();
 
-      if (updateError) throw updateError;
+      if (updateError) {
+        console.error('Database update error:', updateError);
+        throw updateError;
+      }
+      console.log('Database updated:', updateData);
 
       // Delete old image from storage
       const { error: deleteError } = await supabase.storage
@@ -202,11 +224,13 @@ export default function PhotoManagement() {
 
       if (deleteError) {
         console.warn('Failed to delete old image:', deleteError);
+      } else {
+        console.log('Old image deleted');
       }
 
       return true;
     } catch (error) {
-      console.error('Error converting image:', error);
+      console.error(`Error converting image ${image.id}:`, error);
       return false;
     }
   };
@@ -260,6 +284,67 @@ export default function PhotoManagement() {
     await fetchImages();
   };
 
+  const handleDeleteCorruptImages = async () => {
+    if (!confirm('This will attempt to delete all images that appear grey/corrupt. Continue?')) {
+      return;
+    }
+
+    setIsDeleting(true);
+    let deletedCount = 0;
+    let failedCount = 0;
+
+    try {
+      // Try to identify potentially corrupt images by attempting to load them
+      for (const image of images) {
+        try {
+          // Test if image loads
+          const response = await fetch(image.image_url, { method: 'HEAD' });
+          if (!response.ok || response.headers.get('content-length') === '0') {
+            // Image appears corrupt, delete from database
+            const { error } = await supabase
+              .from('tower_images')
+              .delete()
+              .eq('id', image.id);
+
+            if (error) {
+              console.error('Failed to delete corrupt image:', image.id, error);
+              failedCount++;
+            } else {
+              console.log('Deleted corrupt image:', image.id);
+              deletedCount++;
+            }
+          }
+        } catch (err) {
+          // If fetch fails, image is likely corrupt
+          const { error } = await supabase
+            .from('tower_images')
+            .delete()
+            .eq('id', image.id);
+
+          if (error) {
+            console.error('Failed to delete corrupt image:', image.id, error);
+            failedCount++;
+          } else {
+            console.log('Deleted corrupt image:', image.id);
+            deletedCount++;
+          }
+        }
+      }
+
+      alert(`Cleanup complete!\n✅ Deleted: ${deletedCount}\n❌ Failed: ${failedCount}`);
+      
+      // Clear caches and refresh
+      clearTowersCache();
+      clearImageCache();
+      await fetchImages();
+    } catch (error) {
+      console.error('Error during cleanup:', error);
+      alert('Cleanup failed: ' + (error as Error).message);
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   const handleDeleteImage = async (image: TowerImage) => {
     if (!confirm(`Are you sure you want to delete this image of "${image.tower?.name}"?`)) {
       return;
@@ -267,20 +352,36 @@ export default function PhotoManagement() {
 
     setIsDeleting(true);
     try {
-      // Delete from storage
+      console.log('Deleting image:', image.id, image.storage_path);
+      
+      // Try to delete from storage first (may fail for corrupt images)
       const { error: storageError } = await supabase.storage
         .from('tower-images')
         .remove([image.storage_path]);
 
-      if (storageError) throw storageError;
+      if (storageError) {
+        console.warn('Storage deletion failed (may not exist):', storageError);
+        // Continue anyway - we still want to clean up the database
+      } else {
+        console.log('Storage deletion successful');
+      }
 
-      // Delete from database
+      // Delete from database (this should always work)
       const { error: dbError } = await supabase
         .from('tower_images')
         .delete()
         .eq('id', image.id);
 
-      if (dbError) throw dbError;
+      if (dbError) {
+        console.error('Database deletion failed:', dbError);
+        throw dbError;
+      }
+
+      console.log('Database deletion successful');
+
+      // Clear caches
+      clearTowersCache();
+      clearImageCache();
 
       // Refresh the list
       await fetchImages();
@@ -322,22 +423,40 @@ export default function PhotoManagement() {
               Manage and moderate user-uploaded photos ({images.length} total)
             </p>
           </div>
-          <button
-            onClick={handleBulkConversion}
-            disabled={isConverting}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-          >
-            {isConverting ? (
-              <>
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                Converting {conversionProgress.current}/{conversionProgress.total}...
-              </>
-            ) : (
-              <>
-                🔄 Convert JPEGs to WebP
-              </>
-            )}
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={handleDeleteCorruptImages}
+              disabled={isDeleting}
+              className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+            >
+              {isDeleting ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                  Cleaning...
+                </>
+              ) : (
+                <>
+                  🗑️ Delete Corrupt
+                </>
+              )}
+            </button>
+            <button
+              onClick={handleBulkConversion}
+              disabled={isConverting || isDeleting}
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+            >
+              {isConverting ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                  Converting {conversionProgress.current}/{conversionProgress.total}...
+                </>
+              ) : (
+                <>
+                  🔄 Convert to WebP
+                </>
+              )}
+            </button>
+          </div>
         </div>
       </div>
 
