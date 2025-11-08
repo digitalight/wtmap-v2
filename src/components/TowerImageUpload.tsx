@@ -50,6 +50,8 @@ export default function TowerImageUpload({ towerId, userId, onImageUploaded }: T
     setError(null);
 
     try {
+      console.log('Starting upload for file:', file.name, file.type, file.size);
+      
       // Optimize image - always convert to WebP
       const optimized = await optimizeImage(file, {
         maxWidth: 900,
@@ -58,9 +60,18 @@ export default function TowerImageUpload({ towerId, userId, onImageUploaded }: T
         format: 'webp',
       });
 
+      console.log('Optimization complete, blob size:', optimized.size);
+
+      // Double-check blob size before upload
+      if (optimized.size < 10240) {
+        throw new Error('Optimized image is too small. This may be a Live Photo - please disable Live Photo mode in your camera settings and try again.');
+      }
+
       // Generate file name - always use webp extension
       const extension = getFileExtension(file, optimized, 'webp');
       const filePath = generateFileName(towerId, userId, extension);
+
+      console.log('Uploading to:', filePath);
 
       // Upload to Supabase Storage
       const { data: uploadData, error: uploadError } = await supabase.storage
@@ -163,6 +174,13 @@ export default function TowerImageUpload({ towerId, userId, onImageUploaded }: T
         <p className="mt-1 text-xs text-gray-500">
           JPEG, PNG, WebP, or HEIC • Max 10MB • Will be optimized automatically
         </p>
+        
+        {/* iPhone Live Photo warning */}
+        <div className="mt-2 p-2 bg-yellow-50 border border-yellow-200 rounded-lg">
+          <p className="text-xs text-yellow-800">
+            <strong>iPhone users:</strong> If your upload fails or produces small/broken files, please disable <strong>Live Photo</strong> mode in your camera before taking pictures. Live Photos are not supported.
+          </p>
+        </div>
       </div>
 
       {preview && (

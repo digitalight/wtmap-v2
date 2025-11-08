@@ -48,10 +48,19 @@ export async function optimizeImage(
 ): Promise<Blob> {
   const opts = { ...DEFAULT_OPTIONS, ...options };
 
+  console.log('Optimizing image:', {
+    name: file.name,
+    type: file.type,
+    size: file.size,
+    targetFormat: opts.format
+  });
+
   // Convert HEIC to JPEG first if needed
   let processFile: File | Blob = file;
   if (file.type === 'image/heic' || file.name.toLowerCase().endsWith('.heic')) {
+    console.log('Converting HEIC to JPEG...');
     processFile = await convertHeicToJpeg(file);
+    console.log('HEIC converted, new size:', processFile.size);
   }
 
   return new Promise((resolve, reject) => {
@@ -61,6 +70,14 @@ export async function optimizeImage(
       const img = new Image();
       
       img.onload = () => {
+        console.log('Image loaded:', { width: img.width, height: img.height });
+        
+        // Validate image dimensions
+        if (img.width === 0 || img.height === 0) {
+          reject(new Error('Invalid image dimensions'));
+          return;
+        }
+
         // Calculate new dimensions while maintaining aspect ratio
         let { width, height } = img;
         
@@ -71,6 +88,7 @@ export async function optimizeImage(
           );
           width = Math.round(width * ratio);
           height = Math.round(height * ratio);
+          console.log('Resizing to:', { width, height });
         }
 
         // Create canvas and draw resized image
@@ -90,25 +108,48 @@ export async function optimizeImage(
         
         ctx.drawImage(img, 0, 0, width, height);
 
-        // Convert to blob
+        // Convert to blob with quality adjustments for WebP
+        const quality = opts.format === 'webp' ? opts.quality : 0.9;
+        
         canvas.toBlob(
           (blob) => {
             if (blob) {
+              console.log('Blob created:', { 
+                size: blob.size, 
+                type: blob.type,
+                sizeKB: Math.round(blob.size / 1024) 
+              });
+              
+              // Validate blob size (should be at least 10KB for a real image)
+              if (blob.size < 10240) {
+                console.error('Blob too small, likely corrupt:', blob.size);
+                reject(new Error('Generated image is too small (possibly corrupt)'));
+                return;
+              }
+              
               resolve(blob);
             } else {
               reject(new Error('Failed to create blob'));
             }
           },
           `image/${opts.format}`,
-          opts.quality
+          quality
         );
       };
 
-      img.onerror = () => reject(new Error('Failed to load image'));
+      img.onerror = () => {
+        console.error('Failed to load image');
+        reject(new Error('Failed to load image'));
+      };
+      
       img.src = e.target?.result as string;
     };
 
-    reader.onerror = () => reject(new Error('Failed to read file'));
+    reader.onerror = () => {
+      console.error('Failed to read file');
+      reject(new Error('Failed to read file'));
+    };
+    
     reader.readAsDataURL(processFile);
   });
 }
