@@ -13,6 +13,8 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isSignUp, setIsSignUp] = useState(false);
+  const [isResetPassword, setIsResetPassword] = useState(false);
+  const [resetEmail, setResetEmail] = useState('');
   const router = useRouter();
   const supabase = createClientComponentClient();
 
@@ -76,12 +78,33 @@ export default function LoginPage() {
     }
   };
 
+  const handleResetPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setError(null);
+
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(resetEmail, {
+        redirectTo: `${window.location.origin}/reset-password`,
+      });
+
+      if (error) throw error;
+
+      setError('Check your email for the password reset link!');
+      setResetEmail('');
+    } catch (error: any) {
+      setError(error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50">
-      <div className="max-w-md w-full space-y-8 p-8">
+      <div>
         <div>
           <h2 className="text-center text-3xl font-extrabold text-gray-900">
-            {isSignUp ? 'Create your account' : 'Sign in to your account'}
+            {isResetPassword ? 'Reset your password' : (isSignUp ? 'Create your account' : 'Sign in to your account')}
           </h2>
         </div>
         
@@ -95,6 +118,50 @@ export default function LoginPage() {
           </div>
         )}
 
+        {isResetPassword ? (
+          // Password Reset Form
+          <form className="mt-8 space-y-6" onSubmit={handleResetPassword}>
+            <div>
+              <input
+                type="email"
+                required
+                value={resetEmail}
+                onChange={(e) => setResetEmail(e.target.value)}
+                className="appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                placeholder="Email address"
+              />
+            </div>
+
+            <div>
+              <button
+                type="submit"
+                disabled={loading}
+                className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
+              >
+                {loading ? 'Sending...' : 'Send reset link'}
+              </button>
+            </div>
+
+            <div className="text-center space-y-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsResetPassword(false);
+                  setError(null);
+                  setResetEmail('');
+                }}
+                className="text-indigo-600 hover:text-indigo-500"
+              >
+                ← Back to sign in
+              </button>
+              <br />
+              <Link href="/" className="text-indigo-600 hover:text-indigo-500">
+                ← Back to home
+              </Link>
+            </div>
+          </form>
+        ) : (
+          <>
         {/* OAuth Buttons */}
         <div className="space-y-3">
           <button
@@ -210,11 +277,28 @@ export default function LoginPage() {
               {isSignUp ? 'Already have an account? Sign in' : "Don't have an account? Sign up"}
             </button>
             <br />
+            {!isSignUp && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsResetPassword(true);
+                    setError(null);
+                  }}
+                  className="text-indigo-600 hover:text-indigo-500"
+                >
+                  Forgot password?
+                </button>
+                <br />
+              </>
+            )}
             <Link href="/" className="text-indigo-600 hover:text-indigo-500">
               ← Back to home
             </Link>
           </div>
         </form>
+          </>
+        )}
       </div>
     </div>
   );
