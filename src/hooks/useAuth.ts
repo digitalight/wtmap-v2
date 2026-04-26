@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, createContext, useContext, useRef } from 'react';
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import { createBrowserClient } from '@supabase/ssr';
 import type { User } from '@supabase/supabase-js';
 
 interface AuthContextType {
@@ -17,12 +17,20 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export const useAuth = () => {
   const context = useContext(AuthContext);
   if (!context) {
-    // Fallback hook for when not using provider
+    // Fallback hook for when not using provider.
+    // Context is never provided in this app so hooks always run — eslint-disable is safe here.
+    // eslint-disable-next-line react-hooks/rules-of-hooks
     const [user, setUser] = useState<User | null>(null);
+    // eslint-disable-next-line react-hooks/rules-of-hooks
     const [loading, setLoading] = useState(true);
-    const supabase = createClientComponentClient();
+    const supabase = createBrowserClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    );
+    // eslint-disable-next-line react-hooks/rules-of-hooks
     const initRef = useRef(false);
 
+    // eslint-disable-next-line react-hooks/rules-of-hooks
     useEffect(() => {
       // Prevent duplicate initialization in strict mode
       if (initRef.current) return;

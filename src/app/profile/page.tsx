@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import { createBrowserClient } from '@supabase/ssr';
 import { useAuth } from '../../hooks/useAuth';
 import Navigation from '../../components/Navigation';
 
@@ -58,7 +58,7 @@ const ProfilePage = () => {
   const [resetPasswordLoading, setResetPasswordLoading] = useState(false);
   const [resetPasswordMessage, setResetPasswordMessage] = useState<string | null>(null);
   const [countyProgressLoaded, setCountyProgressLoaded] = useState(false);
-  const supabase = createClientComponentClient();
+  const supabase = createBrowserClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!);
   const dataFetchedRef = useRef(false);
   const [showSkeleton, setShowSkeleton] = useState(true);
 

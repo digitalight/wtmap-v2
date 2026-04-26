@@ -4,7 +4,7 @@ import React, { useEffect, useState, useMemo, Fragment } from 'react';
 import dynamic from 'next/dynamic';
 import { Dialog, Transition } from '@headlessui/react';
 import { XMarkIcon, CheckIcon } from '@heroicons/react/24/outline';
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import { createBrowserClient } from '@supabase/ssr';
 import TowerComments from './TowerComments';
 import TowerImageGallery from './TowerImageGallery';
 import TowerImageUpload from './TowerImageUpload';
@@ -66,7 +66,10 @@ const Map: React.FC<MapProps> = ({ towers = [], user = null, selectedTowerId = n
   const [isStreetViewOpen, setIsStreetViewOpen] = useState(false);
   const [streetViewTower, setStreetViewTower] = useState<Tower | null>(null);
   const [showFilters, setShowFilters] = useState(false);
-  const supabase = createClientComponentClient();
+  const supabase = createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  );
 
   useEffect(() => {
     // Import Leaflet only on client side
@@ -74,9 +77,9 @@ const Map: React.FC<MapProps> = ({ towers = [], user = null, selectedTowerId = n
       // Fix Leaflet default markers
       delete (leaflet.Icon.Default.prototype as any)._getIconUrl;
       leaflet.Icon.Default.mergeOptions({
-        iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon-2x.png',
-        iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon.png',
-        shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
+        iconRetinaUrl: '/assets/markers/marker-icon-2x.png',
+        iconUrl: '/assets/markers/marker-icon.png',
+        shadowUrl: '/assets/markers/marker-shadow.png',
       });
       setL(leaflet);
       setMounted(true);
@@ -167,52 +170,43 @@ const Map: React.FC<MapProps> = ({ towers = [], user = null, selectedTowerId = n
   useEffect(() => {
     if (!mounted) return;
 
-    const updateLocation = () => {
-      if (!('geolocation' in navigator)) {
-        return;
-      }
-      
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          const newLocation = {
-            lat: position.coords.latitude,
-            lng: position.coords.longitude
-          };
-          setUserLocation(newLocation);
-          setLocationError(null);
+    if (!('geolocation' in navigator)) return;
 
-          // Zoom to location on first load
-          if (map && !hasZoomedToLocation) {
-            map.setView([newLocation.lat, newLocation.lng], 13);
-            setHasZoomedToLocation(true);
-          }
-        },
-        (error) => {
-          let errorMsg = 'Location unavailable';
-          if (error.code === 1) {
-            errorMsg = 'Location permission denied. Please enable location in your browser settings.';
-          } else if (error.code === 2) {
-            errorMsg = 'Location unavailable. Please check your device settings.';
-          } else if (error.code === 3) {
-            errorMsg = 'Location request timed out.';
-          }
-          setLocationError(errorMsg);
-        },
-        {
-          enableHighAccuracy: true,
-          timeout: 10000,
-          maximumAge: 0
+    // watchPosition fires only on actual movement — avoids battery drain from polling
+    const watchId = navigator.geolocation.watchPosition(
+      (position) => {
+        const newLocation = {
+          lat: position.coords.latitude,
+          lng: position.coords.longitude,
+        };
+        setUserLocation(newLocation);
+        setLocationError(null);
+
+        // Zoom to location on first load
+        if (map && !hasZoomedToLocation) {
+          map.setView([newLocation.lat, newLocation.lng], 13);
+          setHasZoomedToLocation(true);
         }
-      );
-    };
+      },
+      (error) => {
+        let errorMsg = 'Location unavailable';
+        if (error.code === 1) {
+          errorMsg = 'Location permission denied. Please enable location in your browser settings.';
+        } else if (error.code === 2) {
+          errorMsg = 'Location unavailable. Please check your device settings.';
+        } else if (error.code === 3) {
+          errorMsg = 'Location request timed out.';
+        }
+        setLocationError(errorMsg);
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 30000,
+      }
+    );
 
-    // Get initial location
-    updateLocation();
-
-    // Update location every 5 seconds
-    const intervalId = setInterval(updateLocation, 5000);
-
-    return () => clearInterval(intervalId);
+    return () => navigator.geolocation.clearWatch(watchId);
   }, [mounted, map, hasZoomedToLocation]);
 
   // Zoom to user location when both map and location are ready
@@ -227,23 +221,30 @@ const Map: React.FC<MapProps> = ({ towers = [], user = null, selectedTowerId = n
     }
   }, [map, userLocation, hasZoomedToLocation]);
 
-  // Create custom icons for visited/unvisited towers
-  const createTowerIcon = (isVisited: boolean) => {
+  // Memoize tower icons — avoids allocating new Icon objects on every render
+  const visitedTowerIcon = useMemo(() => {
     if (!L) return undefined;
-    
-    const iconUrl = isVisited 
-      ? 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-green.png'
-      : 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon-2x.png';
-    
     return new L.Icon({
-      iconUrl,
-      shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
+      iconUrl: '/assets/markers/marker-icon-2x-green.png',
+      shadowUrl: '/assets/markers/marker-shadow.png',
       iconSize: [25, 41],
       iconAnchor: [12, 41],
       popupAnchor: [1, -34],
-      shadowSize: [41, 41]
+      shadowSize: [41, 41],
     });
-  };
+  }, [L]);
+
+  const unvisitedTowerIcon = useMemo(() => {
+    if (!L) return undefined;
+    return new L.Icon({
+      iconUrl: '/assets/markers/marker-icon-2x.png',
+      shadowUrl: '/assets/markers/marker-shadow.png',
+      iconSize: [25, 41],
+      iconAnchor: [12, 41],
+      popupAnchor: [1, -34],
+      shadowSize: [41, 41],
+    });
+  }, [L]);
 
   // Create rabbit icon for user location
   const rabbitIcon = useMemo(() => {
@@ -306,16 +307,23 @@ const Map: React.FC<MapProps> = ({ towers = [], user = null, selectedTowerId = n
     ? towers.filter(tower => tower.county_id === selectedCounty)
     : towers;
 
-  // Get county statistics
-  const getCountyStats = (countyId: number) => {
-    const countyTowers = towers.filter(t => t.county_id === countyId);
-    const visitedInCounty = countyTowers.filter(t => visitedTowers.has(t.id)).length;
-    return {
-      total: countyTowers.length,
-      visited: visitedInCounty,
-      unvisited: countyTowers.length - visitedInCounty
-    };
-  };
+  // Pre-compute county stats once whenever towers/visits/counties change
+  const countyStatsMap = useMemo(() => {
+    const statsMap = new globalThis.Map<number, { total: number; visited: number; unvisited: number }>();
+    counties.forEach(county => {
+      const countyTowers = towers.filter(t => t.county_id === county.id);
+      const visitedInCounty = countyTowers.filter(t => visitedTowers.has(t.id)).length;
+      statsMap.set(county.id, {
+        total: countyTowers.length,
+        visited: visitedInCounty,
+        unvisited: countyTowers.length - visitedInCounty,
+      });
+    });
+    return statsMap;
+  }, [towers, visitedTowers, counties]);
+
+  const getCountyStats = (countyId: number) =>
+    countyStatsMap.get(countyId) ?? { total: 0, visited: 0, unvisited: 0 };
 
   // Style for county boundaries
   const countyStyle = (feature: any) => {
@@ -532,7 +540,7 @@ const Map: React.FC<MapProps> = ({ towers = [], user = null, selectedTowerId = n
             <Marker
               key={tower.id}
               position={[tower.latitude, tower.longitude]}
-              icon={createTowerIcon(isVisited)}
+              icon={isVisited ? visitedTowerIcon : unvisitedTowerIcon}
             >
               <Popup>
                 <div>
@@ -628,7 +636,14 @@ const Map: React.FC<MapProps> = ({ towers = [], user = null, selectedTowerId = n
           setSelectedTower(null);
         }}
         visitedTowers={visitedTowers}
-        onVisitUpdate={fetchVisitedTowers}
+        onVisitToggle={(towerId, action) => {
+          setVisitedTowers(prev => {
+            const next = new Set(prev);
+            if (action === 'add') next.add(towerId);
+            else next.delete(towerId);
+            return next;
+          });
+        }}
         user={user}
         onOpenStreetView={(tower) => {
           setStreetViewTower(tower);
@@ -656,7 +671,7 @@ function TowerDetailsModal({
   isOpen, 
   onClose,
   visitedTowers,
-  onVisitUpdate,
+  onVisitToggle,
   user,
   onOpenStreetView
 }: { 
@@ -664,13 +679,16 @@ function TowerDetailsModal({
   isOpen: boolean; 
   onClose: () => void;
   visitedTowers: Set<string>;
-  onVisitUpdate: () => Promise<void>;
+  onVisitToggle: (towerId: string, action: 'add' | 'remove') => void;
   user: User | null;
   onOpenStreetView: (tower: Tower) => void;
 }) {
   const [isLoading, setIsLoading] = useState(false);
   const [galleryRefreshKey, setGalleryRefreshKey] = useState(0);
-  const supabase = createClientComponentClient();
+  const supabase = createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  );
 
   const hasVisited = tower ? visitedTowers.has(tower.id) : false;
 
@@ -689,7 +707,7 @@ function TowerDetailsModal({
         if (error) {
           console.error('Error removing visit:', error);
         } else {
-          await onVisitUpdate(); // Refresh the visited towers state
+          onVisitToggle(tower.id, 'remove');
         }
       } else {
         const { error } = await supabase
@@ -702,7 +720,7 @@ function TowerDetailsModal({
         if (error) {
           console.error('Error marking visit:', error);
         } else {
-          await onVisitUpdate(); // Refresh the visited towers state
+          onVisitToggle(tower.id, 'add');
         }
       }
     } catch (error) {

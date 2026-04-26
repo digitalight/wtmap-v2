@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import { createBrowserClient } from '@supabase/ssr';
 import { useAuth } from '../../hooks/useAuth';
 import Navigation from '../../components/Navigation';
 
@@ -30,7 +30,7 @@ const VisitsPage = () => {
   const [filterBy, setFilterBy] = useState<'all' | 'commented' | 'rated'>('all');
   const [editingVisitId, setEditingVisitId] = useState<string | null>(null);
   const [editDate, setEditDate] = useState<string>('');
-  const supabase = createClientComponentClient();
+  const supabase = createBrowserClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!);
 
   useEffect(() => {
     if (user) {

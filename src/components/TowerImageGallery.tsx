@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState, useRef } from 'react';
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import { createBrowserClient } from '@supabase/ssr';
 
 interface TowerImage {
   id: string;
@@ -19,8 +19,18 @@ interface TowerImageGalleryProps {
   refreshKey?: number;
 }
 
-// Cache for tower images
+// Cache for tower images — capped at 50 entries (FIFO eviction)
+const IMAGE_CACHE_MAX = 50;
 const imageCache = new Map<string, TowerImage[]>();
+
+function imageCacheSet(key: string, value: TowerImage[]) {
+  if (imageCache.size >= IMAGE_CACHE_MAX && !imageCache.has(key)) {
+    // Evict the oldest entry
+    const firstKey = imageCache.keys().next().value;
+    if (firstKey !== undefined) imageCache.delete(firstKey);
+  }
+  imageCache.set(key, value);
+}
 
 // Export function to clear image cache (useful after bulk operations)
 export function clearImageCache() {
@@ -32,7 +42,10 @@ export default function TowerImageGallery({ towerId, currentUserId, refreshKey }
   const [loading, setLoading] = useState(!imageCache.has(towerId));
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [loadedImages, setLoadedImages] = useState<Set<string>>(new Set());
-  const supabase = createClientComponentClient();
+  const supabase = createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  );
   const fetchedRef = useRef(false);
 
   useEffect(() => {
@@ -78,7 +91,7 @@ export default function TowerImageGallery({ towerId, currentUserId, refreshKey }
       setImages(imageData);
       
       // Cache the results
-      imageCache.set(towerId, imageData);
+      imageCacheSet(towerId, imageData);
       
     } catch (error) {
       console.error('Error fetching images:', error);

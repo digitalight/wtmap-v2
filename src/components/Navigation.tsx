@@ -4,7 +4,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import { createBrowserClient } from '@supabase/ssr';
 
 interface NavigationProps {
   towersCount?: number;
@@ -25,7 +25,7 @@ const Navigation: React.FC<NavigationProps> = ({ towersCount = 0 }) => {
   const dropdownRef = useRef<HTMLDivElement>(null);
   const fetchedRef = useRef(false);
   const router = useRouter();
-  const supabase = createClientComponentClient();
+  const supabase = createBrowserClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!);
 
   // Fetch user profile for name display with caching
   useEffect(() => {

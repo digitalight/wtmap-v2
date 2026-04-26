@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import { createBrowserClient } from '@supabase/ssr';
 
 interface Tower {
   id: string;
@@ -56,7 +56,7 @@ export const useTowers = () => {
   const [towers, setTowers] = useState<Tower[]>(cachedTowers || []); // Use cache initially
   const [loading, setLoading] = useState(!cachedTowers); // Don't show loading if we have cache
   const [error, setError] = useState<Error | null>(null);
-  const supabase = createClientComponentClient();
+  const supabase = createBrowserClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!);
   const fetchedRef = useRef(false);
 
   useEffect(() => {

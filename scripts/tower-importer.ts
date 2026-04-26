@@ -1,7 +1,6 @@
 import fs from 'fs';
 import path from 'path';
 import { createClient } from '@supabase/supabase-js';
-import * as turf from '@turf/turf';
 
 // Initialize Supabase client (make sure to set your environment variables)
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
