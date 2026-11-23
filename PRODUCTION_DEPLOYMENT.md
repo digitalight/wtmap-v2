@@ -261,7 +261,7 @@ WHERE email = 'your-email@gmail.com';
 ### Keep-alive and backups
 
 **Keep-alive** (stops Supabase pausing the project for inactivity)
-- Vercel Cron calls `GET /api/cron/keep-alive` daily (`vercel.json`). Set `CRON_SECRET` in Vercel env vars (Production) and redeploy.
+- A Vercel Schedule (`schedules` in `vercel.json`, replaces the legacy `crons`) calls `GET /api/cron/keep-alive` daily. Set `CRON_SECRET` in Vercel env vars (Production) and redeploy.
 - `.github/workflows/keep-database-awake.yml` pings the DB daily as a second line of defence.
 
 **Backups** (`.github/workflows/database-backup.yml`, weekly + manual "Run workflow")
