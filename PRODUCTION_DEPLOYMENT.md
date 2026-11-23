@@ -256,7 +256,24 @@ WHERE email = 'your-email@gmail.com';
 - Monitor storage usage (images)
 - Review user feedback/comments
 - Update dependencies quarterly
-- Backup database monthly
+- Backups and keep-alive run automatically (see below)
+
+### Keep-alive and backups
+
+**Keep-alive** (stops Supabase pausing the project for inactivity)
+- Vercel Cron calls `GET /api/cron/keep-alive` daily (`vercel.json`). Set `CRON_SECRET` in Vercel env vars (Production) and redeploy.
+- `.github/workflows/keep-database-awake.yml` pings the DB daily as a second line of defence.
+
+**Backups** (`.github/workflows/database-backup.yml`, weekly + manual "Run workflow")
+- GitHub repo secrets required:
+  - `SUPABASE_DB_URL` – Supabase → Connect → **Session pooler** connection string (direct connection is IPv6-only and won't work from GitHub runners)
+  - `BACKUP_PASSPHRASE` – long random string; **store it in a password manager**, backups can't be decrypted without it
+  - `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY` – for the keep-alive ping
+- Encrypted dumps (`public` + `auth` schemas) are kept as workflow artifacts for 90 days. Download one occasionally and download-test it.
+- Restore: `gpg -d backup.sql.gz.gpg | gunzip | psql "$DATABASE_URL"`
+- Not covered: files in Supabase Storage (tower images). Back those up separately.
+- Manual dump: `DATABASE_URL=... ./scripts/backup-db.sh` (writes to the git-ignored `backups/`).
+- GitHub disables scheduled workflows after 60 days without repo activity, so re-enable them in the Actions tab if that happens.
 
 ---
 

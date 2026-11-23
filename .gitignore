@@ -3,3 +3,5 @@ node_modules
 .env.local
 .DS_Store
 .vscode
+# Local database dumps (contain production user data)
+backups/

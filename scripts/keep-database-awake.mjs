@@ -1,29 +1,23 @@
 // Simple script to keep Supabase database awake
-// Run this with a cron job or scheduled task daily
+// Run by .github/workflows/keep-database-awake.yml (backup to the Vercel cron route)
 
 import { createClient } from "@supabase/supabase-js";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-const supabase = createClient(supabaseUrl, supabaseKey);
-
-async function pingDatabase() {
-  try {
-    console.log("Pinging database...");
-    const { data, error } = await supabase
-      .from("water_towers")
-      .select("id")
-      .limit(1);
-
-    if (error) {
-      console.error("Error pinging database:", error);
-    } else {
-      console.log("✅ Database is awake!");
-    }
-  } catch (err) {
-    console.error("Failed to ping database:", err);
-  }
+if (!supabaseUrl || !supabaseKey) {
+  console.error("Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY");
+  process.exit(1);
 }
 
-pingDatabase();
+const supabase = createClient(supabaseUrl, supabaseKey);
+
+console.log("Pinging database...");
+const { error } = await supabase.from("water_towers").select("id").limit(1);
+
+if (error) {
+  console.error("Error pinging database:", error);
+  process.exit(1);
+}
+console.log("✅ Database is awake!");
