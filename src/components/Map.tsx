@@ -56,6 +56,7 @@ const Map: React.FC<MapProps> = ({ towers = [], user = null, selectedTowerId = n
   const [selectedTower, setSelectedTower] = useState<Tower | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [visitedTowers, setVisitedTowers] = useState<Set<string>>(new Set());
+  const [visitedByAnyone, setVisitedByAnyone] = useState<Set<string>>(new Set());
   const [counties, setCounties] = useState<County[]>([]);
   const [selectedCounty, setSelectedCounty] = useState<number | null>(null);
   const [showBoundaries, setShowBoundaries] = useState(false);
@@ -94,6 +95,11 @@ const Map: React.FC<MapProps> = ({ towers = [], user = null, selectedTowerId = n
       setVisitedTowers(new Set());
     }
   }, [user]);
+
+  // Fetch towers visited by any user (public data) on mount
+  useEffect(() => {
+    fetchVisitedByAnyone();
+  }, []);
 
   // Fetch counties on mount
   useEffect(() => {
@@ -166,6 +172,21 @@ const Map: React.FC<MapProps> = ({ towers = [], user = null, selectedTowerId = n
     }
   };
 
+  const fetchVisitedByAnyone = async () => {
+    try {
+      const { data, error } = await supabase.rpc('get_visited_tower_ids');
+
+      if (error) {
+        console.error('Error fetching all visited towers:', error);
+        return;
+      }
+
+      setVisitedByAnyone(new Set<string>(data || []));
+    } catch (error) {
+      console.error('Error fetching all visited towers:', error);
+    }
+  };
+
   // Track user location
   useEffect(() => {
     if (!mounted) return;
@@ -234,10 +255,24 @@ const Map: React.FC<MapProps> = ({ towers = [], user = null, selectedTowerId = n
     });
   }, [L]);
 
-  const unvisitedTowerIcon = useMemo(() => {
+  // Blue: visited by another user
+  const visitedByOthersIcon = useMemo(() => {
     if (!L) return undefined;
     return new L.Icon({
       iconUrl: '/assets/markers/marker-icon-2x.png',
+      shadowUrl: '/assets/markers/marker-shadow.png',
+      iconSize: [25, 41],
+      iconAnchor: [12, 41],
+      popupAnchor: [1, -34],
+      shadowSize: [41, 41],
+    });
+  }, [L]);
+
+  // Grey: not visited by anyone
+  const unvisitedTowerIcon = useMemo(() => {
+    if (!L) return undefined;
+    return new L.Icon({
+      iconUrl: '/assets/markers/marker-icon-2x-grey.png',
       shadowUrl: '/assets/markers/marker-shadow.png',
       iconSize: [25, 41],
       iconAnchor: [12, 41],
@@ -278,6 +313,8 @@ const Map: React.FC<MapProps> = ({ towers = [], user = null, selectedTowerId = n
             newSet.delete(towerId);
             return newSet;
           });
+          // Others may still have visited it, so re-check rather than assume
+          fetchVisitedByAnyone();
         }
       } else {
         const { error } = await supabase
@@ -295,6 +332,7 @@ const Map: React.FC<MapProps> = ({ towers = [], user = null, selectedTowerId = n
             newSet.add(towerId);
             return newSet;
           });
+          setVisitedByAnyone(prev => new Set(prev).add(towerId));
         }
       }
     } catch (error) {
@@ -536,11 +574,16 @@ const Map: React.FC<MapProps> = ({ towers = [], user = null, selectedTowerId = n
         {/* Render towers */}
         {filteredTowers && Array.isArray(filteredTowers) && filteredTowers.map((tower) => {
           const isVisited = visitedTowers.has(tower.id);
+          const markerIcon = isVisited
+            ? visitedTowerIcon
+            : visitedByAnyone.has(tower.id)
+              ? visitedByOthersIcon
+              : unvisitedTowerIcon;
           return (
             <Marker
               key={tower.id}
               position={[tower.latitude, tower.longitude]}
-              icon={isVisited ? visitedTowerIcon : unvisitedTowerIcon}
+              icon={markerIcon}
             >
               <Popup>
                 <div>
@@ -643,6 +686,12 @@ const Map: React.FC<MapProps> = ({ towers = [], user = null, selectedTowerId = n
             else next.delete(towerId);
             return next;
           });
+          if (action === 'add') {
+            setVisitedByAnyone(prev => new Set(prev).add(towerId));
+          } else {
+            // Others may still have visited it, so re-check rather than assume
+            fetchVisitedByAnyone();
+          }
         }}
         user={user}
         onOpenStreetView={(tower) => {
