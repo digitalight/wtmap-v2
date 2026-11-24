@@ -47,24 +47,25 @@ const AdminPage: React.FC = () => {
     );
   }
 
-  const handleImport = async (action: string) => {
+  const handleImport = async (action: string, dryRun = false) => {
     setImporting(true);
     setImportStatus('');
     setImportError('');
 
     try {
-      setImportStatus(`Starting ${action === 'import_overpass' ? 'UK-wide' : 'London'} import...`);
+      const label = action === 'import_overpass' ? 'UK-wide' : action === 'import_sample' ? 'London' : 'OSM ID backfill';
+      setImportStatus(`Starting ${dryRun ? 'dry run of ' : ''}${label}...`);
       
       const response = await fetch('/api/admin/import', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action }),
+        body: JSON.stringify({ action, data: { dryRun } }),
       });
 
       const result = await response.json();
 
       if (!response.ok) {
-        throw new Error(result.error || 'Import failed');
+        throw new Error(result.message || result.details || result.error || 'Import failed');
       }
 
       setImportStatus(`✅ ${result.message}`);
@@ -76,8 +77,18 @@ const AdminPage: React.FC = () => {
     }
   };
 
+  const handleRealImport = (action: string) => {
+    if (!confirm('Have you run a dry run and taken a backup? This will write to the database.')) return;
+    handleImport(action);
+  };
+
   const handleClearDatabase = async () => {
-    if (!confirm('⚠️ This will delete ALL water towers from the database. Are you sure?')) {
+    const phrase = 'DELETE ALL TOWERS';
+    const typed = prompt(
+      `⚠️ This deletes ALL water towers, and with them every visit, comment and photo record linked to them. It cannot be undone.\n\nType "${phrase}" to confirm:`
+    );
+    if (typed !== phrase) {
+      if (typed !== null) setImportError('Clear cancelled: confirmation phrase did not match.');
       return;
     }
 
@@ -91,7 +102,7 @@ const AdminPage: React.FC = () => {
       const response = await fetch('/api/admin/import', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'clear_database' }),
+        body: JSON.stringify({ action: 'clear_database', data: { confirmation: phrase } }),
       });
 
       const result = await response.json();
@@ -204,36 +215,78 @@ const AdminPage: React.FC = () => {
                 <div className="border border-gray-200 rounded-lg p-4">
                   <h3 className="font-semibold mb-2">Import All UK Water Towers</h3>
                   <p className="text-sm text-gray-600 mb-3">
-                    Downloads all water towers from OpenStreetMap for the entire United Kingdom.
-                    This may take several minutes.
+                    Downloads water towers from OpenStreetMap for the entire United Kingdom and adds
+                    only the ones not already in the database. Run the dry run first to see what would change.
                   </p>
-                  <button
-                    onClick={() => handleImport('import_overpass')}
-                    disabled={importing}
-                    className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
-                  >
-                    {importing ? 'Importing...' : 'Import UK Towers'}
-                  </button>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => handleImport('import_overpass', true)}
+                      disabled={importing}
+                      className="border border-blue-600 text-blue-700 px-4 py-2 rounded hover:bg-blue-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {importing ? 'Working...' : 'Dry run (no changes)'}
+                    </button>
+                    <button
+                      onClick={() => handleRealImport('import_overpass')}
+                      disabled={importing}
+                      className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                    >
+                      {importing ? 'Importing...' : 'Import UK Towers'}
+                    </button>
+                  </div>
                 </div>
 
                 <div className="border border-gray-200 rounded-lg p-4">
                   <h3 className="font-semibold mb-2">Import London Sample</h3>
                   <p className="text-sm text-gray-600 mb-3">
-                    Downloads water towers from the London area only for testing.
+                    Downloads water towers from the London area only, skipping any already in the database.
                   </p>
-                  <button
-                    onClick={() => handleImport('import_sample')}
-                    disabled={importing}
-                    className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
-                  >
-                    {importing ? 'Importing...' : 'Import London Sample'}
-                  </button>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => handleImport('import_sample', true)}
+                      disabled={importing}
+                      className="border border-green-600 text-green-700 px-4 py-2 rounded hover:bg-green-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {importing ? 'Working...' : 'Dry run (no changes)'}
+                    </button>
+                    <button
+                      onClick={() => handleRealImport('import_sample')}
+                      disabled={importing}
+                      className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                    >
+                      {importing ? 'Importing...' : 'Import London Sample'}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="border border-gray-200 rounded-lg p-4">
+                  <h3 className="font-semibold mb-2">Backfill OpenStreetMap IDs</h3>
+                  <p className="text-sm text-gray-600 mb-3">
+                    Links existing towers to their OpenStreetMap IDs so future imports recognise them.
+                    Only fills in blank OSM ID fields; no towers are added or changed otherwise.
+                  </p>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => handleImport('backfill_osm_ids', true)}
+                      disabled={importing}
+                      className="border border-gray-600 text-gray-700 px-4 py-2 rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {importing ? 'Working...' : 'Dry run (no changes)'}
+                    </button>
+                    <button
+                      onClick={() => handleRealImport('backfill_osm_ids')}
+                      disabled={importing}
+                      className="bg-gray-700 text-white px-4 py-2 rounded hover:bg-gray-800 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                    >
+                      {importing ? 'Working...' : 'Backfill OSM IDs'}
+                    </button>
+                  </div>
                 </div>
 
                 <div className="border border-red-200 rounded-lg p-4 bg-red-50">
                   <h3 className="font-semibold text-red-900 mb-2">⚠️ Clear All Towers</h3>
                   <p className="text-sm text-red-700 mb-3">
-                    Removes all water towers from the database. This cannot be undone.
+                    Removes all water towers from the database, along with their visits, comments and photo records. You'll need to type a confirmation phrase. This cannot be undone.
                   </p>
                   <button
                     onClick={handleClearDatabase}

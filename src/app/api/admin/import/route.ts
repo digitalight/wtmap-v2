@@ -1,7 +1,9 @@
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
-import { TowerDataImporter } from '../../../../../scripts/tower-importer';
+import { syncTowersFromOverpass, type ImportRegion, type SyncMode } from '../../../../utils/towerSync';
+
+const CLEAR_CONFIRMATION = 'DELETE ALL TOWERS';
 
 async function requireAdminAuth(): Promise<NextResponse | null> {
   const cookieStore = await cookies();
@@ -81,107 +83,6 @@ async function addTestTowers() {
   return data;
 }
 
-async function importSimpleTowers(query?: string) {
-  const { createClient } = await import('@supabase/supabase-js');
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-  const supabaseKey = process.env.SUPABASE_SERVICE_KEY!;
-  const supabase = createClient(supabaseUrl, supabaseKey);
-
-  console.log('Importing simple towers from Overpass API...');
-
-  // Use London bounding box with the proven query format from the original project
-  const londonQuery = `
-    [out:json][timeout:40];
-    nwr["man_made"="water_tower"](51.2,-0.5,51.7,0.3);
-    out geom;
-  `;
-
-  try {
-    const response = await fetch('https://overpass-api.de/api/interpreter', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-      body: `data=${encodeURIComponent(londonQuery)}`
-    });
-
-    if (!response.ok) {
-      throw new Error(`Overpass API error: ${response.statusText}`);
-    }
-
-    const osmData = await response.json();
-    console.log(`Found ${osmData.elements?.length || 0} elements from OSM`);
-    console.log('Sample OSM data:', JSON.stringify(osmData.elements?.slice(0, 2), null, 2));
-
-    if (!osmData.elements || osmData.elements.length === 0) {
-      console.log('No water towers found in the specified area');
-      console.log('Full OSM response:', JSON.stringify(osmData, null, 2));
-      return;
-    }
-
-    // Process elements into simple format (only basic fields)
-    const towers = osmData.elements.map((element: any) => {
-      let lat: number, lon: number;
-      
-      if (element.type === 'node' && element.lat && element.lon) {
-        lat = element.lat;
-        lon = element.lon;
-      } else if (element.center) {
-        lat = element.center.lat;
-        lon = element.center.lon;
-      } else {
-        return null;
-      }
-
-      const tags = element.tags || {};
-      const name = tags.name || 
-                  tags['name:en'] || 
-                  tags.description || 
-                  `Water Tower ${element.id}`;
-
-      return {
-        name,
-        latitude: lat,
-        longitude: lon
-      };
-    }).filter(Boolean);
-
-    console.log(`Processed ${towers.length} towers for insertion`);
-
-    if (towers.length === 0) {
-      console.log('No valid towers to insert');
-      return;
-    }
-
-    // Insert in batches
-    const batchSize = 100;
-    let inserted = 0;
-
-    for (let i = 0; i < towers.length; i += batchSize) {
-      const batch = towers.slice(i, i + batchSize);
-      
-      const { data, error } = await supabase
-        .from('water_towers')
-        .insert(batch)
-        .select();
-
-      if (error) {
-        console.error(`Batch insert error:`, error);
-        continue;
-      }
-
-      inserted += data?.length || 0;
-      console.log(`Inserted batch ${Math.floor(i / batchSize) + 1}: ${data?.length || 0} towers`);
-    }
-
-    console.log(`✅ Simple import complete: ${inserted} towers inserted`);
-
-  } catch (error) {
-    console.error('Error in simple import:', error);
-    throw error;
-  }
-}
-
 async function clearDatabase() {
   const { createClient } = await import('@supabase/supabase-js');
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -219,135 +120,6 @@ async function clearDatabase() {
 
   } catch (error) {
     console.error('Error clearing database:', error);
-    throw error;
-  }
-}
-
-async function importSimpleFullData(region: 'london' | 'uk') {
-  const { createClient } = await import('@supabase/supabase-js');
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-  const supabaseKey = process.env.SUPABASE_SERVICE_KEY!;
-  const supabase = createClient(supabaseUrl, supabaseKey);
-
-  console.log(`Importing ${region} water towers with simple schema...`);
-
-  // Define queries for different regions using your proven format
-  const queries = {
-    london: `
-      [out:json][timeout:40];
-      nwr["man_made"="water_tower"](51.2,-0.5,51.7,0.3);
-      out geom;
-    `,
-    uk: `
-      [out:json][timeout:40];
-      area["name"="United Kingdom"]->.searchArea;
-      nwr["man_made"="water_tower"](area.searchArea);
-      out geom;
-    `
-  };
-
-  try {
-    const response = await fetch('https://overpass-api.de/api/interpreter', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-      body: `data=${encodeURIComponent(queries[region])}`
-    });
-
-    if (!response.ok) {
-      throw new Error(`Overpass API error: ${response.statusText}`);
-    }
-
-    const osmData = await response.json();
-    console.log(`Found ${osmData.elements?.length || 0} elements from OSM for ${region}`);
-
-    if (!osmData.elements || osmData.elements.length === 0) {
-      console.log(`No water towers found in ${region}`);
-      return;
-    }
-
-    // Process elements into simple format (only basic fields that exist in current schema)
-    const towers = osmData.elements.map((element: any) => {
-      let lat: number, lon: number;
-      
-      // Handle different geometry types
-      if (element.type === 'node' && element.lat && element.lon) {
-        lat = element.lat;
-        lon = element.lon;
-      } else if (element.center) {
-        lat = element.center.lat;
-        lon = element.center.lon;
-      } else if (element.nodes && element.geometry) {
-        // For ways, use first geometry point
-        const firstPoint = element.geometry[0];
-        if (firstPoint) {
-          lat = firstPoint.lat;
-          lon = firstPoint.lon;
-        } else {
-          return null;
-        }
-      } else {
-        return null;
-      }
-
-      const tags = element.tags || {};
-      const name = tags.name || 
-                  tags['name:en'] || 
-                  tags.description || 
-                  `Water Tower ${element.id}`;
-
-      return {
-        name,
-        latitude: lat,
-        longitude: lon
-      };
-    }).filter(Boolean);
-
-    console.log(`Processed ${towers.length} towers for insertion`);
-
-    if (towers.length === 0) {
-      console.log('No valid towers to insert');
-      return;
-    }
-
-    // Insert in batches to avoid overwhelming the database
-    const batchSize = 50; // Smaller batches for better reliability
-    let inserted = 0;
-    let errors = 0;
-
-    for (let i = 0; i < towers.length; i += batchSize) {
-      const batch = towers.slice(i, i + batchSize);
-      
-      try {
-        const { data, error } = await supabase
-          .from('water_towers')
-          .insert(batch)
-          .select();
-
-        if (error) {
-          console.error(`Batch ${Math.floor(i / batchSize) + 1} insert error:`, error);
-          errors += batch.length;
-          continue;
-        }
-
-        inserted += data?.length || 0;
-        console.log(`✅ Batch ${Math.floor(i / batchSize) + 1}: ${data?.length || 0} towers inserted`);
-        
-        // Add small delay between batches to be gentle on the API
-        if (i + batchSize < towers.length) {
-          await new Promise(resolve => setTimeout(resolve, 500));
-        }
-      } catch (batchError) {
-        console.error(`Batch ${Math.floor(i / batchSize) + 1} error:`, batchError);
-        errors += batch.length;
-      }
-    }
-
-    console.log(`✅ ${region.toUpperCase()} import complete: ${inserted} towers inserted, ${errors} errors`);
-
-  } catch (error) {
-    console.error(`Error importing ${region} towers:`, error);
     throw error;
   }
 }
@@ -458,29 +230,49 @@ export async function POST(request: Request) {
   try {
     const { action, data } = await request.json();
 
-    switch (action) {
-      case 'import_overpass':
-        // Import all UK water towers - simplified version
-        await importSimpleFullData('uk');
-        break;
+    const syncActions: Record<string, { region: ImportRegion; mode: SyncMode }> = {
+      import_overpass: { region: 'uk', mode: 'import' },
+      import_sample: { region: 'london', mode: 'import' },
+      import_simple: { region: 'london', mode: 'import' },
+      backfill_osm_ids: { region: 'uk', mode: 'backfill' },
+    };
 
-      case 'import_sample':
-        // Import full data sample (London area) - simplified version
-        await importSimpleFullData('london');
-        break;
-        
+    if (syncActions[action]) {
+      const { region, mode } = syncActions[action];
+      const dryRun = data?.dryRun === true;
+      const summary = await syncTowersFromOverpass(region, { dryRun, mode });
+
+      const parts = [
+        `${summary.osmElements} found on OpenStreetMap, ${summary.existingTowers} already in database`,
+        `${summary.matchedByOsmId + summary.matchedByName + summary.matchedByLocation} matched existing`,
+        `${summary.osmIdsBackfilled} OSM IDs ${dryRun ? 'would be ' : ''}backfilled`,
+      ];
+      if (mode === 'import') {
+        parts.push(dryRun ? `${summary.toInsert} new towers would be added` : `${summary.inserted} new towers added`);
+      }
+      if (summary.errors > 0) parts.push(`${summary.errors} errors`);
+
+      return NextResponse.json({
+        success: summary.errors === 0,
+        message: `${dryRun ? 'Dry run: ' : ''}${parts.join('; ')}`,
+        summary,
+      }, { status: summary.errors === 0 ? 200 : 500 });
+    }
+
+    switch (action) {
       case 'add_test_data':
         // Add some test water towers to check if the system is working
         await addTestTowers();
         break;
 
-      case 'import_simple':
-        // Import with simplified schema (only basic fields) - no county system
-        await importSimpleTowers();
-        break;
-
       case 'clear_database':
-        // Clear all tower data for a fresh start
+        // Destructive (cascades to visits/comments/images), so require the typed phrase server-side too
+        if (data?.confirmation !== CLEAR_CONFIRMATION) {
+          return NextResponse.json(
+            { error: `Confirmation phrase required: type "${CLEAR_CONFIRMATION}"` },
+            { status: 400 }
+          );
+        }
         await clearDatabase();
         break;
 
@@ -489,15 +281,12 @@ export async function POST(request: Request) {
         return await runMigration();
 
       default:
-        return NextResponse.json(
-          { error: 'Invalid action. Use "import_overpass" or "import_sample"' },
-          { status: 400 }
-        );
+        return NextResponse.json({ error: 'Invalid action' }, { status: 400 });
     }
 
     return NextResponse.json({ 
       success: true, 
-      message: `Import completed for action: ${action}` 
+      message: `Completed action: ${action}` 
     });
 
   } catch (error) {
