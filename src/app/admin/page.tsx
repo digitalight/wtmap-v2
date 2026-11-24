@@ -286,7 +286,7 @@ const AdminPage: React.FC = () => {
                 <div className="border border-red-200 rounded-lg p-4 bg-red-50">
                   <h3 className="font-semibold text-red-900 mb-2">⚠️ Clear All Towers</h3>
                   <p className="text-sm text-red-700 mb-3">
-                    Removes all water towers from the database, along with their visits, comments and photo records. You'll need to type a confirmation phrase. This cannot be undone.
+                    Removes all water towers from the database, along with their visits, comments and photo records. You will need to type a confirmation phrase. This cannot be undone.
                   </p>
                   <button
                     onClick={handleClearDatabase}
